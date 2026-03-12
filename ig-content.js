@@ -102,6 +102,9 @@
         if (response?.notConnected) {
           return reject(Object.assign(new Error('NOT_CONNECTED'), { notConnected: true }));
         }
+        if (response?.rateLimit) {
+          return reject(Object.assign(new Error('RATE_LIMIT'), { rateLimit: true }));
+        }
         if (!response?.ok) return reject(new Error(response?.error || 'AI request failed'));
         resolve({ variants: response.variants, commentId: response.commentId || null });
       });
@@ -541,7 +544,7 @@
         _currentVariants  = variants;
         showComment(variants[ENERGIES[_currentEnergyIdx].key]);
       } catch (err) {
-        const isRateLimit = err.message.includes('429') || err.message.toLowerCase().includes('daily limit');
+        const isRateLimit = err.rateLimit || err.message.includes('429') || err.message.toLowerCase().includes('daily limit');
         console.error('[Tapfill] generate failed:', err);
         if (isRateLimit) { showError(false, true); return; }
         showError(err.notConnected, false);
