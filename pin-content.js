@@ -120,8 +120,7 @@
   function insertTextReact(textbox, text) {
     textbox.focus();
 
-    // Select all existing content via Selection API (avoids execCommand('selectAll')
-    // which can trigger Pinterest combobox auto-commit / suggestion behaviour).
+    // Select all existing content via Selection API
     const sel   = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textbox);
@@ -129,13 +128,26 @@
     sel.addRange(range);
 
     // Replace selection with the generated comment.
-    document.execCommand('insertText', false, text);
+    // execCommand fires the synthetic input event React listens to.
+    const ok = document.execCommand('insertText', false, text);
+
+    // Fallback: if execCommand didn't insert the text (returns false or
+    // textbox is still empty), set content directly and fire an InputEvent.
+    if (!ok || !textbox.textContent.trim()) {
+      textbox.textContent = text;
+      textbox.dispatchEvent(new InputEvent('input', {
+        bubbles: true, cancelable: true, inputType: 'insertText', data: text,
+      }));
+    }
 
     // Move caret to end
-    range.selectNodeContents(textbox);
-    range.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(range);
+    try {
+      const endRange = document.createRange();
+      endRange.selectNodeContents(textbox);
+      endRange.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(endRange);
+    } catch (_) { /* ignore if node was replaced by React re-render */ }
   }
 
   // ─── Pin context scraper ─────────────────────────────────────────────────────
@@ -537,12 +549,10 @@
     useBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!_currentComment) return;
+      // Save reference now — closeTapMenu() will null _menuActiveTextbox
       const textbox = _menuActiveTextbox || document.querySelector(TEXTBOX_SEL);
       if (textbox) {
         insertTextReact(textbox, _currentComment);
-        requestAnimationFrame(() =>
-          textbox.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-        );
       }
       if (_currentCommentId) {
         const port = chrome.runtime.connect({ name: 'AI_FETCH' });
@@ -551,16 +561,20 @@
       }
       _lastCopied = true;
       closeTapMenu();
-      // Re-focus the comment box after menu removal.
-      // Pinterest collapses the contenteditable when focus leaves it, and React
-      // may replace the DOM node during text-insertion re-renders (making the old
-      // reference stale). Re-querying fresh + cancelling the hide timer keeps the
-      // field visible so the user can click Pinterest's own Post button.
       clearTimeout(tapHideTimer);
-      requestAnimationFrame(() => {
-        const freshTextbox = document.querySelector(TEXTBOX_SEL);
-        if (freshTextbox) freshTextbox.focus();
-      });
+      // Wait 50 ms for React to finish any re-render triggered by text insertion,
+      // then re-focus the (potentially replaced) textbox. requestAnimationFrame is
+      // too early — it fires before React's state flush. The saved `textbox` ref
+      // is used as a fallback in case Pinterest's collapsed state removes the
+      // aria-label so the selector no longer matches.
+      setTimeout(() => {
+        const fresh = document.querySelector(TEXTBOX_SEL)
+          || (document.body.contains(textbox) ? textbox : null);
+        if (fresh) {
+          fresh.focus();
+          fresh.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, 50);
     });
 
     addCanvasBtn.addEventListener('click', (e) => {
