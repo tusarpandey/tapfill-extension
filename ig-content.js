@@ -31,6 +31,67 @@
     { emoji: '🎬', label: 'Filmy',     desc: 'Full cinematic. Dramatic flair.',    tone: 'disagree',     temp: 0.8 },
   ];
 
+  const CREATOR_TONES = [
+    { emoji: '🔥', label: 'Savage',     desc: 'Zero filter. High impact.',   tone: 'savage',    temp: 0.9, tonePrompt: 'Write a brutally honest, sharp comment with zero filter. Makes a strong point, leaves a mark, but stays within respectful limits. High impact and memorable.' },
+    { emoji: '🧘', label: 'Wise',       desc: 'Deep insight. Quotable.',     tone: 'wise',      temp: 0.4, tonePrompt: 'Write a thoughtful, philosophical comment like a mentor speaking. Deep insight, quotable, the kind of comment people screenshot and share.' },
+    { emoji: '💫', label: 'Hype',       desc: 'High energy. Celebratory.',   tone: 'hype',      temp: 0.9, tonePrompt: 'Write an energetic, enthusiastic comment full of excitement. Like a best friend cheering someone on. High energy, motivating, celebratory.' },
+    { emoji: '😏', label: 'Sarcastic',  desc: 'Dry. Clever. Smart.',         tone: 'sarcastic', temp: 0.8, tonePrompt: 'Write a dry, clever, subtly sarcastic comment. The kind that makes people laugh and think at the same time. Smart sarcasm, not mean or offensive.' },
+    { emoji: '🌶️', label: 'Desi',       desc: 'Indian humor. Relatable.',    tone: 'desi',      temp: 0.9, tonePrompt: 'Write a funny, relatable, quintessentially Indian humor comment. Use cultural references, Indian expressions, light sarcasm. The kind of comment that makes an Indian say yaar yeh toh bilkul sach hai.' },
+  ];
+
+  let _userPlan = 'free';
+  chrome.storage.local.get('tapfill_user', (r) => { _userPlan = r.tapfill_user?.plan || 'free'; });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.tapfill_user) _userPlan = changes.tapfill_user.newValue?.plan || 'free';
+  });
+
+  let _selectedLanguage = 'english';
+  chrome.storage.local.get('tapfill_language', (r) => { _selectedLanguage = r.tapfill_language || 'english'; });
+  let _toneOrder = [];
+  chrome.storage.local.get('tapfill_tone_order', (r) => { _toneOrder = r.tapfill_tone_order || []; });
+
+  // ─── Devanagari → Hinglish transliteration ───────────────────────────────────
+  function devanagariToHinglish(text) {
+    const C = {
+      'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'ng',
+      'च':'ch','छ':'chh','ज':'j','झ':'jh','ञ':'ny',
+      'ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n',
+      'त':'t','थ':'th','द':'d','ध':'dh','न':'n',
+      'प':'p','फ':'ph','ब':'b','भ':'bh','म':'m',
+      'य':'y','र':'r','ल':'l','व':'v',
+      'श':'sh','ष':'sh','स':'s','ह':'h','ळ':'l',
+      'क़':'q','ख़':'kh','ग़':'gh','ज़':'z','ड़':'r','ढ़':'rh','फ़':'f',
+    };
+    const M = { 'ा':'aa','ि':'i','ी':'ee','ु':'u','ू':'oo','ृ':'ri','े':'e','ै':'ai','ो':'o','ौ':'au','ॉ':'o','ॅ':'e' };
+    const V = { 'अ':'a','आ':'aa','इ':'i','ई':'ee','उ':'u','ऊ':'oo','ए':'e','ऐ':'ai','ओ':'o','औ':'au','ऋ':'ri','ऑ':'o' };
+    const VIRAMA = '्';
+    const chars = [...text];
+    let out = '', i = 0;
+    while (i < chars.length) {
+      const c = chars[i];
+      if (C[c] !== undefined) {
+        const next = chars[i + 1];
+        if (next === VIRAMA) { out += C[c]; i += 2; }
+        else if (M[next] !== undefined) { out += C[c] + M[next]; i += 2; }
+        else { const end = !next || /[ \n.,!?;:()\[\]"'—\-]/.test(next); out += C[c] + (end ? '' : 'a'); i++; }
+        if (chars[i] === 'ं' || chars[i] === 'ँ') { out += 'n'; i++; }
+        else if (chars[i] === 'ः') { out += 'h'; i++; }
+      } else if (V[c] !== undefined) {
+        out += V[c]; i++;
+        if (chars[i] === 'ं' || chars[i] === 'ँ') { out += 'n'; i++; }
+        else if (chars[i] === 'ः') { out += 'h'; i++; }
+      } else if (c === 'ं' || c === 'ँ') { out += 'n'; i++;
+      } else if (c === 'ः') { out += 'h'; i++;
+      } else if (c === '।' || c === '॥') { out += '.'; i++;
+      } else if (c >= '०' && c <= '९') { out += String.fromCharCode(c.charCodeAt(0) - 0x0966 + 48); i++;
+      } else { out += c; i++; }
+    }
+    return out;
+  }
+  function transliterateVariants(variants) {
+    return { subtle: devanagariToHinglish(variants.subtle||''), balanced: devanagariToHinglish(variants.balanced||''), bold: devanagariToHinglish(variants.bold||''), powerful: devanagariToHinglish(variants.powerful||'') };
+  }
+
   // ─── Spinner keyframe ─────────────────────────────────────────────────────────
 
   function injectStyles() {
@@ -93,6 +154,7 @@
   // ─── AI call via background port ─────────────────────────────────────────────
 
   async function generateAllVariants(postText, toneObj) {
+    const language = _selectedLanguage === 'hinglish' ? 'hindi' : _selectedLanguage;
     return new Promise((resolve, reject) => {
       const port = chrome.runtime.connect({ name: 'AI_FETCH' });
       let settled = false;
@@ -106,13 +168,13 @@
           return reject(Object.assign(new Error('RATE_LIMIT'), { rateLimit: true }));
         }
         if (!response?.ok) return reject(new Error(response?.error || 'AI request failed'));
-        resolve({ variants: response.variants, commentId: response.commentId || null });
+        resolve({ variants: response.variants, commentId: response.commentId || null, toneOrder: response.toneOrder || null });
       });
       port.onDisconnect.addListener(() => {
         if (settled) return; settled = true;
         reject(new Error(chrome.runtime.lastError?.message || 'Port disconnected'));
       });
-      port.postMessage({ type: 'GENERATE', postText, tone: toneObj.tone, platform: 'instagram' });
+      port.postMessage({ type: 'GENERATE', postText, tone: toneObj.tone, platform: 'instagram', language, tonePrompt: toneObj.tonePrompt || null });
     });
   }
 
@@ -123,7 +185,7 @@
   async function shareCanvasAsImage(shareBtn) {
     if (!_canvasItems.length) return;
 
-    const W = 380, PAD = 18, CARD_GAP = 12, LINE_H = 19, EMO_W = 50;
+    const W = 380, PAD = 18, CARD_GAP = 12, LINE_H = 19, EMO_W = 80;
     const CARD_PAD = 14, HDR_H = 76, FTR_H = 36, DPR = 2;
     const ff = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
@@ -263,10 +325,49 @@
     // ── Chips row ────────────────────────────────────────────────────────────
     const chipsRow = document.createElement('div');
     Object.assign(chipsRow.style, {
-      display: 'flex', gap: '6px', flexWrap: 'nowrap', overflowX: 'auto',
-      justifyContent: 'center',
+      display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px',
     });
     menu.appendChild(chipsRow);
+
+    // ── Language row ──────────────────────────────────────────────────────────
+    const langRow = document.createElement('div');
+    Object.assign(langRow.style, { display: 'flex', gap: '6px', marginTop: '8px' });
+    const LANG_OPTIONS = [
+      { key: 'english',  label: 'English' },
+      { key: 'hindi',    label: 'Hindi' },
+      { key: 'hinglish', label: 'Hinglish' },
+    ];
+    let _activeLangBtn = null;
+    function setLangActive(btn) {
+      if (_activeLangBtn) Object.assign(_activeLangBtn.style, { background: '#f8fafc', borderColor: 'transparent', color: '#64748b', fontWeight: '500' });
+      _activeLangBtn = btn;
+      Object.assign(btn.style, { background: '#eef2ff', borderColor: '#818cf8', color: '#6366f1', fontWeight: '600' });
+    }
+    LANG_OPTIONS.forEach(({ key, label }) => {
+      const lb = document.createElement('button');
+      lb.type = 'button'; lb.textContent = label;
+      Object.assign(lb.style, { flex: '1', padding: '5px 4px', borderRadius: '8px', border: '1.5px solid transparent', background: '#f8fafc', color: '#64748b', fontSize: '11px', fontWeight: '500', fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s' });
+      lb.addEventListener('mousedown', e => e.preventDefault());
+      lb.addEventListener('click', () => {
+        _selectedLanguage = key;
+        setLangActive(lb);
+        chrome.storage.local.set({ tapfill_language: key });
+        if (_langCache[key]) {
+          _currentVariants = _langCache[key];
+          showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
+        } else if (key === 'hinglish' && _langCache['hindi']) {
+          const hl = transliterateVariants(_langCache['hindi']);
+          _langCache['hinglish'] = hl;
+          _currentVariants = hl;
+          showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
+        } else if (_currentTone) {
+          generateForTone(_currentTone);
+        }
+      });
+      langRow.appendChild(lb);
+      chrome.storage.local.get('tapfill_language', (r) => { if ((r.tapfill_language || 'english') === key) setLangActive(lb); });
+    });
+    menu.appendChild(langRow);
 
     // ── Gradient separator ────────────────────────────────────────────────────
     const sep = document.createElement('div');
@@ -402,7 +503,10 @@
     let _currentComment   = null;
     let _currentCommentId = null;
     let _currentVariants  = null;
+    let _lastCopied       = false;
+    let _langCache        = {};
     let _currentEnergyIdx = 1;
+    let _retryTone        = null;
 
     const SPINNER_SVG = `<svg width="14" height="14" viewBox="0 0 16 16" style="animation:ig-tap-spin 0.7s linear infinite;flex-shrink:0"><circle cx="8" cy="8" r="6" fill="none" stroke="#818cf8" stroke-width="2" stroke-dasharray="25" stroke-dashoffset="9"/></svg>`;
 
@@ -498,7 +602,7 @@
         });
         upgradeBtn.textContent = 'Upgrade Plan \u2192';
         upgradeBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
-        upgradeBtn.addEventListener('click', () => chrome.tabs.create({ url: 'https://tapfill.io/pricing' }));
+        upgradeBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'OPEN_URL', url: 'https://tapfill.io/pricing' }));
         limitDiv.append(limitSpan, upgradeBtn);
         spinnerWrap.appendChild(limitDiv);
         spinnerWrap.style.display = 'flex';
@@ -522,7 +626,23 @@
         spinnerWrap.appendChild(div);
         spinnerWrap.style.display = 'flex';
       } else {
-        spinnerWrap.innerHTML = `<span style="color:#ef4444;font-size:12px">Generation failed — try a different tone.</span>`;
+        spinnerWrap.innerHTML = '';
+        const errDiv = document.createElement('div');
+        Object.assign(errDiv.style, { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '4px 0' });
+        const errSpan = document.createElement('span');
+        Object.assign(errSpan.style, { color: '#ef4444', fontSize: '12px', textAlign: 'center' });
+        errSpan.textContent = 'Generation failed — try again.';
+        const retryBtn = document.createElement('button');
+        Object.assign(retryBtn.style, {
+          background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb',
+          borderRadius: '20px', padding: '6px 18px', fontSize: '12px', fontWeight: '600',
+          cursor: 'pointer', fontFamily: 'inherit',
+        });
+        retryBtn.textContent = '\u21ba Retry';
+        retryBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
+        retryBtn.addEventListener('click', () => { if (_retryTone) generateForTone(_retryTone); });
+        errDiv.append(errSpan, retryBtn);
+        spinnerWrap.appendChild(errDiv);
         spinnerWrap.style.display = 'flex';
       }
       commentEl.style.display  = 'none';
@@ -532,6 +652,10 @@
     }
 
     async function generateForTone(toneObj) {
+      _retryTone = toneObj;
+      // Fast pre-check: bail immediately if no token in storage
+      const _preCheck = await new Promise(r => chrome.storage.local.get('tapfill_token', r));
+      if (!_preCheck.tapfill_token?.access_token) { showError(true, false); return; }
       if (_currentEnergyIdx !== 1) {
         energyDots[_currentEnergyIdx].style.boxShadow = 'none';
         energyDots[1].style.boxShadow = `0 0 0 2px #fff, 0 0 0 4px ${DOT_PALETTE[1].ring}`;
@@ -539,10 +663,16 @@
       }
       showLoading();
       try {
-        const { variants, commentId } = await generateAllVariants(_menuPostText, toneObj);
+        const { variants, commentId, toneOrder: newToneOrder } = await generateAllVariants(_menuPostText, toneObj);
         _currentCommentId = commentId;
-        _currentVariants  = variants;
-        showComment(variants[ENERGIES[_currentEnergyIdx].key]);
+        if (newToneOrder) { _toneOrder = newToneOrder; chrome.storage.local.set({ tapfill_tone_order: newToneOrder }); }
+        const apiLang = _selectedLanguage === 'hinglish' ? 'hindi' : _selectedLanguage;
+        _langCache[apiLang] = variants;
+        const displayVariants = _selectedLanguage === 'hinglish'
+          ? ((_langCache['hinglish'] = transliterateVariants(variants)), _langCache['hinglish'])
+          : variants;
+        _currentVariants = displayVariants;
+        showComment(displayVariants[ENERGIES[_currentEnergyIdx].key]);
       } catch (err) {
         const isRateLimit = err.rateLimit || err.message.includes('429') || err.message.toLowerCase().includes('daily limit');
         console.error('[Tapfill] generate failed:', err);
@@ -552,7 +682,7 @@
     }
 
     // ── Canvas View ───────────────────────────────────────────────────────────
-    const mainViewEls = [header, chipsRow, sep, resultCard];
+    const mainViewEls = [header, chipsRow, langRow, sep, resultCard];
 
     const canvasView = document.createElement('div');
     Object.assign(canvasView.style, {
@@ -719,10 +849,21 @@
         port.postMessage({ type: 'FEEDBACK', commentId: _currentCommentId, signal: 'use' });
         setTimeout(() => port.disconnect(), 1000);
       }
+      _lastCopied = true;
       closeTapMenu();
     });
 
-    TONES.forEach((toneObj) => {
+    const visibleTones = (_userPlan === 'creator' ? [...TONES, ...CREATOR_TONES] : TONES)
+      .slice()
+      .sort((a, b) => {
+        const ai = _toneOrder.indexOf(a.tone);
+        const bi = _toneOrder.indexOf(b.tone);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+    visibleTones.forEach((toneObj) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       Object.assign(chip.style, {
@@ -760,6 +901,13 @@
       chip.addEventListener('mouseleave', () => { if (_selectedChip !== chip) chip.style.background = '#f8fafc'; });
 
       chip.addEventListener('click', () => {
+        // Skip signal: switching away from a generated comment that wasn't copied
+        if (_selectedChip && _selectedChip !== chip && _currentCommentId && !_lastCopied) {
+          const skipPort = chrome.runtime.connect({ name: 'AI_FETCH' });
+          skipPort.postMessage({ type: 'FEEDBACK', commentId: _currentCommentId, signal: 'skip' });
+          setTimeout(() => skipPort.disconnect(), 1000);
+        }
+        _lastCopied = false;
         if (_selectedChip && _selectedChip !== chip) {
           _selectedChip.style.background  = '#f8fafc';
           _selectedChip.style.borderColor = 'transparent';
@@ -767,6 +915,7 @@
         }
         _selectedChip = chip;
         _currentTone  = toneObj;
+        _langCache    = {};
         chip.style.background  = '#eef2ff';
         chip.style.borderColor = '#818cf8';
         labelEl.style.color    = '#6366f1';
@@ -775,7 +924,7 @@
     });
 
     document.body.appendChild(menu);
-    return { menu };
+    return { menu, clampPosition };
   }
 
   // ─── Open / close menu ───────────────────────────────────────────────────────
@@ -786,7 +935,7 @@
     _menuActiveTextbox = document.querySelector(TEXTBOX_SEL);
     _menuPostText      = scrapePostText();
 
-    const { menu } = buildTapMenu();
+    const { menu, clampPosition } = buildTapMenu();
 
     const bRect     = tapRootBtn.getBoundingClientRect();
     const POPUP_W   = 320;
@@ -804,6 +953,7 @@
     menu.style.top        = `${top}px`;
     menu.style.left       = `${left}px`;
     menu.style.visibility = '';
+    clampPosition();
 
     setTimeout(() => document.addEventListener('click', onClickAway, true), 0);
   }
@@ -998,5 +1148,12 @@
       tapHideTimer = setTimeout(hideTapRoot, 200);
     }
   }, true);
+
+  // ── Heartbeat — keeps extension_sessions.last_active fresh ──────────────────
+  function sendHeartbeat() {
+    chrome.runtime.sendMessage({ type: 'HEARTBEAT' }, () => { void chrome.runtime.lastError; });
+  }
+  setTimeout(sendHeartbeat, 10000);
+  setInterval(sendHeartbeat, 30 * 60 * 1000);
 
 })();

@@ -38,6 +38,84 @@
     { emoji: '🎬', label: 'Filmy',     desc: 'Full cinematic. Dramatic flair.',   tone: 'disagree',     temp: 0.8 },
   ];
 
+  const CREATOR_TONES = [
+    { emoji: '🔥', label: 'Savage',     desc: 'Zero filter. High impact.',   tone: 'savage',    temp: 0.9, tonePrompt: 'Write a brutally honest, sharp comment with zero filter. Makes a strong point, leaves a mark, but stays within respectful limits. High impact and memorable.' },
+    { emoji: '🧘', label: 'Wise',       desc: 'Deep insight. Quotable.',     tone: 'wise',      temp: 0.4, tonePrompt: 'Write a thoughtful, philosophical comment like a mentor speaking. Deep insight, quotable, the kind of comment people screenshot and share.' },
+    { emoji: '💫', label: 'Hype',       desc: 'High energy. Celebratory.',   tone: 'hype',      temp: 0.9, tonePrompt: 'Write an energetic, enthusiastic comment full of excitement. Like a best friend cheering someone on. High energy, motivating, celebratory.' },
+    { emoji: '😏', label: 'Sarcastic',  desc: 'Dry. Clever. Smart.',         tone: 'sarcastic', temp: 0.8, tonePrompt: 'Write a dry, clever, subtly sarcastic comment. The kind that makes people laugh and think at the same time. Smart sarcasm, not mean or offensive.' },
+    { emoji: '🌶️', label: 'Desi',       desc: 'Indian humor. Relatable.',    tone: 'desi',      temp: 0.9, tonePrompt: 'Write a funny, relatable, quintessentially Indian humor comment. Use cultural references, Indian expressions, light sarcasm. The kind of comment that makes an Indian say yaar yeh toh bilkul sach hai.' },
+  ];
+
+  let _userPlan = 'free';
+  chrome.storage.local.get('tapfill_user', (r) => { _userPlan = r.tapfill_user?.plan || 'free'; });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.tapfill_user) _userPlan = changes.tapfill_user.newValue?.plan || 'free';
+  });
+
+  let _selectedLanguage = 'english';
+  chrome.storage.local.get('tapfill_language', (r) => { _selectedLanguage = r.tapfill_language || 'english'; });
+  let _toneOrder = [];
+  chrome.storage.local.get('tapfill_tone_order', (r) => { _toneOrder = r.tapfill_tone_order || []; });
+
+  // ─── Devanagari → Hinglish (Roman) transliteration ───────────────────────────
+  // Hinglish = Hindi phonetics written in Roman letters — no extra API call needed.
+  function devanagariToHinglish(text) {
+    const C = { // consonants
+      'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'ng',
+      'च':'ch','छ':'chh','ज':'j','झ':'jh','ञ':'ny',
+      'ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n',
+      'त':'t','थ':'th','द':'d','ध':'dh','न':'n',
+      'प':'p','फ':'ph','ब':'b','भ':'bh','म':'m',
+      'य':'y','र':'r','ल':'l','व':'v',
+      'श':'sh','ष':'sh','स':'s','ह':'h','ळ':'l',
+      'क़':'q','ख़':'kh','ग़':'gh','ज़':'z','ड़':'r','ढ़':'rh','फ़':'f',
+    };
+    const M = { // dependent vowel signs (matras)
+      'ा':'aa','ि':'i','ी':'ee','ु':'u','ू':'oo',
+      'ृ':'ri','े':'e','ै':'ai','ो':'o','ौ':'au','ॉ':'o','ॅ':'e',
+    };
+    const V = { // independent vowels
+      'अ':'a','आ':'aa','इ':'i','ई':'ee','उ':'u','ऊ':'oo',
+      'ए':'e','ऐ':'ai','ओ':'o','औ':'au','ऋ':'ri','ऑ':'o',
+    };
+    const VIRAMA = '्';
+    const chars = [...text];
+    let out = '', i = 0;
+    while (i < chars.length) {
+      const c = chars[i];
+      if (C[c] !== undefined) {
+        const next = chars[i + 1];
+        if (next === VIRAMA) {
+          out += C[c]; i += 2;
+        } else if (M[next] !== undefined) {
+          out += C[c] + M[next]; i += 2;
+        } else {
+          const end = !next || /[ \n.,!?;:()\[\]"'—\-]/.test(next);
+          out += C[c] + (end ? '' : 'a'); i++;
+        }
+        if (chars[i] === 'ं' || chars[i] === 'ँ') { out += 'n'; i++; }
+        else if (chars[i] === 'ः') { out += 'h'; i++; }
+      } else if (V[c] !== undefined) {
+        out += V[c]; i++;
+        if (chars[i] === 'ं' || chars[i] === 'ँ') { out += 'n'; i++; }
+        else if (chars[i] === 'ः') { out += 'h'; i++; }
+      } else if (c === 'ं' || c === 'ँ') { out += 'n'; i++;
+      } else if (c === 'ः') { out += 'h'; i++;
+      } else if (c === '।' || c === '॥') { out += '.'; i++;
+      } else if (c >= '०' && c <= '९') { out += String.fromCharCode(c.charCodeAt(0) - 0x0966 + 48); i++;
+      } else { out += c; i++; }
+    }
+    return out;
+  }
+  function transliterateVariants(variants) {
+    return {
+      subtle:   devanagariToHinglish(variants.subtle   || ''),
+      balanced: devanagariToHinglish(variants.balanced || ''),
+      bold:     devanagariToHinglish(variants.bold     || ''),
+      powerful: devanagariToHinglish(variants.powerful || ''),
+    };
+  }
+
   // ─── Spinner keyframe (injected once into <head>) ─────────────────────────────
 
   function injectStyles() {
@@ -156,6 +234,8 @@
   // Returns { variants, commentId } via the Tapfill SaaS backend.
   // variants = { subtle, balanced, bold, powerful }
   async function generateAllVariants(postText, toneObj) {
+    // Hinglish = transliterate Hindi client-side — always call API with 'hindi'
+    const language = _selectedLanguage === 'hinglish' ? 'hindi' : _selectedLanguage;
     return new Promise((resolve, reject) => {
       const port = chrome.runtime.connect({ name: 'AI_FETCH' });
       let settled = false;
@@ -174,13 +254,13 @@
             : (response?.error || 'AI request failed');
           return reject(new Error(msg));
         }
-        resolve({ variants: response.variants, commentId: response.commentId || null });
+        resolve({ variants: response.variants, commentId: response.commentId || null, toneOrder: response.toneOrder || null });
       });
       port.onDisconnect.addListener(() => {
         if (settled) return; settled = true;
         reject(new Error(chrome.runtime.lastError?.message || 'Port disconnected'));
       });
-      port.postMessage({ type: 'GENERATE', postText, tone: toneObj.tone, platform: 'facebook' });
+      port.postMessage({ type: 'GENERATE', postText, tone: toneObj.tone, platform: 'facebook', language, tonePrompt: toneObj.tonePrompt || null });
     });
   }
 
@@ -231,7 +311,7 @@
   async function shareCanvasAsImage(shareBtn) {
     if (!_canvasItems.length) return;
 
-    const W = 380, PAD = 18, CARD_GAP = 12, LINE_H = 19, EMO_W = 50;
+    const W = 380, PAD = 18, CARD_GAP = 12, LINE_H = 19, EMO_W = 80;
     const CARD_PAD = 14, HDR_H = 76, FTR_H = 36, DPR = 2;
     const ff = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     const ENERGY_ACCENT = { subtle: '#a78bfa', balanced: '#818cf8', bold: '#6366f1', powerful: '#4338ca' };
@@ -281,17 +361,18 @@
     ctx.fillStyle = barGrad;
     ctx.beginPath(); ctx.roundRect(0, 0, W, 5, [0, 0, 0, 0]); ctx.fill();
 
-    // Logo wordmark
-    ctx.font = `bold 20px ${ff}`;
-    const logoGrad = ctx.createLinearGradient(PAD, 0, PAD + 80, 0);
-    logoGrad.addColorStop(0, '#6366f1');
-    logoGrad.addColorStop(1, '#a78bfa');
-    ctx.fillStyle = logoGrad;
-    ctx.fillText('tapfill', PAD, HDR_H / 2 + 9);
-    const logoW = ctx.measureText('tapfill').width;
+    // Logo icon + wordmark
+    const hdrImg = new Image();
+    hdrImg.src = LOGO_URL;
+    await new Promise(r => { hdrImg.onload = r; hdrImg.onerror = r; });
+    const ICON_H = 28, ICON_W = hdrImg.width ? Math.round(hdrImg.width * (ICON_H / hdrImg.height)) : 28;
+    ctx.drawImage(hdrImg, PAD, (HDR_H - ICON_H) / 2, ICON_W, ICON_H);
 
-    ctx.font = `500 13px ${ff}`; ctx.fillStyle = '#94a3b8';
-    ctx.fillText('· My Canvas', PAD + logoW + 8, HDR_H / 2 + 9);
+    ctx.font = `700 15px ${ff}`; ctx.fillStyle = '#6366f1';
+    ctx.fillText('tapfill', PAD + ICON_W + 8, HDR_H / 2 - 4);
+
+    ctx.font = `400 13px ${ff}`; ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('·  My Canvas', PAD + ICON_W + 8, HDR_H / 2 + 9);
 
     // Divider
     ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
@@ -348,7 +429,7 @@
     ctx.font = `bold 11px ${ff}`; ctx.fillStyle = wmGrad;
     ctx.fillText('✦  Made with Tapfill', PAD, fy);
     ctx.font = `9px ${ff}`; ctx.fillStyle = '#94a3b8';
-    ctx.fillText('tapfill.ai', W - PAD - ctx.measureText('tapfill.ai').width, fy);
+    ctx.fillText('tapfill.io', W - PAD - ctx.measureText('tapfill.io').width, fy);
 
     // ── Copy to clipboard (download fallback if CSP blocks clipboard) ──────────
     cv.toBlob(async blob => {
@@ -426,10 +507,64 @@
     // ── Chips row ────────────────────────────────────────────────────────────
     const chipsRow = document.createElement('div');
     Object.assign(chipsRow.style, {
-      display: 'flex', gap: '6px', flexWrap: 'nowrap', overflowX: 'auto',
-      justifyContent: 'center',
+      display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px',
     });
     menu.appendChild(chipsRow);
+
+    // ── Language row ──────────────────────────────────────────────────────────
+    const langRow = document.createElement('div');
+    Object.assign(langRow.style, {
+      display: 'flex', gap: '6px', marginTop: '8px',
+    });
+    const LANG_OPTIONS = [
+      { key: 'english',  label: 'English' },
+      { key: 'hindi',    label: 'Hindi' },
+      { key: 'hinglish', label: 'Hinglish' },
+    ];
+    let _activeLangBtn = null;
+    function setLangActive(btn) {
+      if (_activeLangBtn) {
+        Object.assign(_activeLangBtn.style, { background: '#f8fafc', borderColor: 'transparent', color: '#64748b', fontWeight: '500' });
+      }
+      _activeLangBtn = btn;
+      Object.assign(btn.style, { background: '#eef2ff', borderColor: '#818cf8', color: '#6366f1', fontWeight: '600' });
+    }
+    LANG_OPTIONS.forEach(({ key, label }) => {
+      const lb = document.createElement('button');
+      lb.type = 'button';
+      lb.textContent = label;
+      Object.assign(lb.style, {
+        flex: '1', padding: '5px 4px', borderRadius: '8px',
+        border: '1.5px solid transparent', background: '#f8fafc',
+        color: '#64748b', fontSize: '11px', fontWeight: '500',
+        fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s',
+      });
+      lb.addEventListener('mousedown', e => e.preventDefault());
+      lb.addEventListener('click', () => {
+        _selectedLanguage = key;
+        setLangActive(lb);
+        chrome.storage.local.set({ tapfill_language: key });
+        if (_langCache[key]) {
+          // Already cached — instant, no API call
+          _currentVariants = _langCache[key];
+          showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
+        } else if (key === 'hinglish' && _langCache['hindi']) {
+          // Transliterate from cached Hindi — zero extra API call
+          const hl = transliterateVariants(_langCache['hindi']);
+          _langCache['hinglish'] = hl;
+          _currentVariants = hl;
+          showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
+        } else if (_currentTone) {
+          generateForTone(_currentTone);
+        }
+      });
+      langRow.appendChild(lb);
+      chrome.storage.local.get('tapfill_language', (r) => {
+        const saved = r.tapfill_language || 'english';
+        if (key === saved) setLangActive(lb);
+      });
+    });
+    menu.appendChild(langRow);
 
     // ── Gradient separator (hidden until a chip is selected) ─────────────────
     const sep = document.createElement('div');
@@ -574,7 +709,9 @@
     let _currentComment   = null;
     let _currentCommentId = null;  // DB record id — used for feedback
     let _currentVariants  = null;  // { subtle, balanced, bold, powerful }
+    let _langCache        = {};    // lang → variants cache for current tone
     let _currentEnergyIdx = 1;     // default: Balanced
+    let _lastCopied       = false; // true if current comment was copied via useBtn
 
     function clampPosition() {
       requestAnimationFrame(() => {
@@ -654,7 +791,7 @@
         upgradeBtn.textContent = 'Upgrade Plan \u2192';
         upgradeBtn.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
         upgradeBtn.addEventListener('click', () => {
-          chrome.tabs.create({ url: 'https://tapfill.io/pricing' });
+          chrome.runtime.sendMessage({ type: 'OPEN_URL', url: 'https://tapfill.io/pricing' });
         });
         limitDiv.appendChild(limitSpan);
         limitDiv.appendChild(upgradeBtn);
@@ -703,6 +840,9 @@
     }
 
     async function generateForTone(toneObj) {
+      // Fast pre-check: bail immediately if no token in storage
+      const _preCheck = await new Promise(r => chrome.storage.local.get('tapfill_token', r));
+      if (!_preCheck.tapfill_token?.access_token) { showError(true, false); return; }
       // Reset energy selection to Balanced on each new generation
       if (_currentEnergyIdx !== 1) {
         energyDots[_currentEnergyIdx].style.boxShadow = 'none';
@@ -711,10 +851,16 @@
       }
       showLoading();
       try {
-        const { variants, commentId } = await generateAllVariants(_menuPostText, toneObj);
+        const { variants, commentId, toneOrder: newToneOrder } = await generateAllVariants(_menuPostText, toneObj);
         _currentCommentId = commentId;
-        _currentVariants  = variants;
-        showComment(variants[ENERGIES[_currentEnergyIdx].key]);
+        if (newToneOrder) { _toneOrder = newToneOrder; chrome.storage.local.set({ tapfill_tone_order: newToneOrder }); }
+        const apiLang = _selectedLanguage === 'hinglish' ? 'hindi' : _selectedLanguage;
+        _langCache[apiLang] = variants;
+        const displayVariants = _selectedLanguage === 'hinglish'
+          ? ((_langCache['hinglish'] = transliterateVariants(variants)), _langCache['hinglish'])
+          : variants;
+        _currentVariants = displayVariants;
+        showComment(displayVariants[ENERGIES[_currentEnergyIdx].key]);
       } catch (err) {
         const isRateLimit = err.rateLimit || err.message.includes('429') || (err.message && err.message.toLowerCase().includes('daily limit'));
         console.error('[Tapfill] generate failed:', err);
@@ -727,7 +873,7 @@
     }
 
     // ── Inline Canvas View (replaces main content inside same popup) ────────────
-    const mainViewEls = [header, chipsRow, sep, resultCard];
+    const mainViewEls = [header, chipsRow, langRow, sep, resultCard];
 
     const canvasView = document.createElement('div');
     Object.assign(canvasView.style, {
@@ -932,10 +1078,21 @@
         port.postMessage({ type: 'FEEDBACK', commentId: _currentCommentId, signal: 'use' });
         port.disconnect();
       }
+      _lastCopied = true;
       closeTapMenu();
     });
 
-    TONES.forEach((toneObj) => {
+    const visibleTones = (_userPlan === 'creator' ? [...TONES, ...CREATOR_TONES] : TONES)
+      .slice()
+      .sort((a, b) => {
+        const ai = _toneOrder.indexOf(a.tone);
+        const bi = _toneOrder.indexOf(b.tone);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+    visibleTones.forEach((toneObj) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       Object.assign(chip.style, {
@@ -977,6 +1134,13 @@
       });
 
       chip.addEventListener('click', () => {
+        // Skip signal: switching away from a generated comment that wasn't copied
+        if (_selectedChip && _selectedChip !== chip && _currentCommentId && !_lastCopied) {
+          const skipPort = chrome.runtime.connect({ name: 'AI_FETCH' });
+          skipPort.postMessage({ type: 'FEEDBACK', commentId: _currentCommentId, signal: 'skip' });
+          setTimeout(() => skipPort.disconnect(), 1000);
+        }
+        _lastCopied = false;
         if (_selectedChip && _selectedChip !== chip) {
           _selectedChip.style.background  = '#f8fafc';
           _selectedChip.style.borderColor = 'transparent';
@@ -984,6 +1148,7 @@
         }
         _selectedChip = chip;
         _currentTone  = toneObj;
+        _langCache    = {};
         chip.style.background  = '#eef2ff';
         chip.style.borderColor = '#818cf8';
         labelEl.style.color    = '#6366f1';
@@ -1283,5 +1448,12 @@
   immediateFound.forEach((stickerBtn) => {
     injectTapRoot(resolveDialog(stickerBtn));
   });
+
+  // ── Heartbeat — keeps extension_sessions.last_active fresh ──────────────────
+  function sendHeartbeat() {
+    chrome.runtime.sendMessage({ type: 'HEARTBEAT' }, () => { void chrome.runtime.lastError; });
+  }
+  setTimeout(sendHeartbeat, 10000);               // first ping 10s after page load
+  setInterval(sendHeartbeat, 30 * 60 * 1000);     // then every 30 minutes
 
 })();

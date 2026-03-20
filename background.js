@@ -1,4 +1,4 @@
-// Tapfill background service worker v5
+// Tapfill background service worker v6
 //
 // Responsibilities:
 //  1. Receive TAPFILL_AUTH_TOKEN from the SaaS dashboard (externally_connectable)
@@ -7,6 +7,8 @@
 //     using the stored Bearer token.
 //  3. Proxy FEEDBACK messages → SaaS /api/ext/feedback.
 //  4. Auto-refresh expired tokens via /api/ext/refresh before each API call.
+//  5. Create/end extension_sessions records on login/logout.
+//  6. Handle HEARTBEAT messages from content scripts → /api/ext/heartbeat.
 //
 // No API keys are stored here — all AI calls go through the user's account.
 
@@ -29,12 +31,16 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) =>
 
   chrome.storage.local.set({ tapfill_token: tokenData, tapfill_user: userData }, () => {
     console.log('[Tapfill] auth token saved for', message.user_email);
+    // Fetch real plan from server immediately after saving token
+    refreshUserPlan(tokenData.access_token);
+    // Create an extension_sessions record for this login
+    createExtensionSession(tokenData.access_token);
     sendResponse({ ok: true });
   });
   return true;
 });
 
-// ── 2a. Simple message handler — open connect tab from content scripts ────────
+// ── 2a. Simple message handler — open connect tab / heartbeat ─────────────────
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === 'OPEN_CONNECT') {
     console.log('[Tapfill background] OPEN_CONNECT received, opening tab');
@@ -42,8 +48,130 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     chrome.tabs.create({ url: `${SAAS_URL}/auth/extension-connect?ext_id=${extId}` });
     sendResponse({ ok: true });
   }
+  if (msg?.type === 'OPEN_URL' && msg.url) {
+    chrome.tabs.create({ url: msg.url });
+    sendResponse({ ok: true });
+  }
+  if (msg?.type === 'HEARTBEAT') {
+    handleHeartbeat();
+    sendResponse({ ok: true });
+  }
+  if (msg?.type === 'LOGOUT') {
+    chrome.storage.local.get('tapfill_token', (result) => {
+      const accessToken = result.tapfill_token?.access_token;
+      endExtensionSession(accessToken).finally(() => sendResponse({ ok: true }));
+    });
+    return true; // async sendResponse
+  }
   return true;
 });
+
+// ── Plan refresh — fetches real plan from server and updates storage ───────────
+async function refreshUserPlan(accessToken) {
+  try {
+    const res = await fetch(`${SAAS_URL}/api/ext/profile`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.plan) return;
+    const stored = await chrome.storage.local.get('tapfill_user');
+    if (stored.tapfill_user) {
+      chrome.storage.local.set({ tapfill_user: { ...stored.tapfill_user, plan: data.plan } });
+      console.log('[Tapfill] plan refreshed:', data.plan);
+    }
+  } catch (e) {
+    console.warn('[Tapfill] plan refresh failed:', e);
+  }
+}
+
+// Refresh plan on every service worker startup (handles Supabase plan changes)
+chrome.storage.local.get(['tapfill_token', 'tapfill_session_id'], (result) => {
+  if (result.tapfill_token?.access_token) {
+    refreshUserPlan(result.tapfill_token.access_token);
+    // Create session record if one doesn't exist yet (e.g. first startup after session tracking was added)
+    if (!result.tapfill_session_id) {
+      createExtensionSession(result.tapfill_token.access_token);
+    }
+  }
+});
+
+// ── Session management ────────────────────────────────────────────────────────
+
+// Creates a record in extension_sessions on login.
+async function createExtensionSession(accessToken) {
+  try {
+    const browserType = navigator.userAgent;
+    const res = await fetch(`${SAAS_URL}/api/ext/session`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ browser_type: browserType }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.session_id) {
+      chrome.storage.local.set({ tapfill_session_id: data.session_id });
+      console.log('[Tapfill] session created:', data.session_id);
+    }
+  } catch (e) {
+    console.warn('[Tapfill] session create failed:', e);
+  }
+}
+
+// Marks the current session inactive on logout (fire-and-forget).
+async function endExtensionSession(accessToken) {
+  try {
+    const stored = await chrome.storage.local.get('tapfill_session_id');
+    const sessionId = stored.tapfill_session_id;
+    if (!sessionId || !accessToken) return;
+    await fetch(`${SAAS_URL}/api/ext/session`, {
+      method:  'PATCH',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    chrome.storage.local.remove('tapfill_session_id');
+    console.log('[Tapfill] session ended');
+  } catch (e) {
+    console.warn('[Tapfill] session end failed:', e);
+  }
+}
+
+// Called by content script HEARTBEAT messages — updates last_active and syncs plan.
+async function handleHeartbeat() {
+  try {
+    const stored = await chrome.storage.local.get(['tapfill_token', 'tapfill_session_id']);
+    const tokenData = stored.tapfill_token;
+    const sessionId = stored.tapfill_session_id;
+    if (!tokenData?.access_token) return;
+
+    const res = await fetch(`${SAAS_URL}/api/ext/heartbeat`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${tokenData.access_token}`,
+      },
+      body: JSON.stringify({ session_id: sessionId || null }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    // Sync plan if heartbeat returns an updated value
+    if (data.plan) {
+      const userStored = await chrome.storage.local.get('tapfill_user');
+      if (userStored.tapfill_user && userStored.tapfill_user.plan !== data.plan) {
+        chrome.storage.local.set({ tapfill_user: { ...userStored.tapfill_user, plan: data.plan } });
+        console.log('[Tapfill] plan synced via heartbeat:', data.plan);
+      }
+    }
+  } catch (e) {
+    console.warn('[Tapfill] heartbeat failed:', e);
+  }
+}
 
 // ── 2b. Port-based handler for content scripts ────────────────────────────────
 chrome.runtime.onConnect.addListener((port) => {
@@ -75,6 +203,7 @@ async function getFreshToken() {
 
       // Token is expiring — refresh it
       if (!tokenData.refresh_token) {
+        endExtensionSession(tokenData.access_token);
         chrome.storage.local.remove(['tapfill_token', 'tapfill_user']);
         resolve(null);
         return;
@@ -89,6 +218,7 @@ async function getFreshToken() {
 
         if (!res.ok) {
           console.warn('[Tapfill] token refresh failed:', res.status);
+          endExtensionSession(tokenData.access_token);
           chrome.storage.local.remove(['tapfill_token', 'tapfill_user']);
           resolve(null);
           return;
@@ -128,9 +258,11 @@ async function handleGenerate(msg, port) {
         'Authorization': `Bearer ${tokenData.access_token}`,
       },
       body: JSON.stringify({
-        postText: msg.postText,
-        tone:     msg.tone,
-        platform: msg.platform || 'web',
+        postText:   msg.postText,
+        tone:       msg.tone,
+        platform:   msg.platform || 'web',
+        language:   msg.language || 'english',
+        tonePrompt: msg.tonePrompt || null,
       }),
     });
 
@@ -140,6 +272,7 @@ async function handleGenerate(msg, port) {
     try { data = JSON.parse(text); } catch {
       console.error('[Tapfill] non-JSON response from generate:', res.status, text.slice(0, 120));
       if (res.status === 401) {
+        endExtensionSession(tokenData.access_token);
         chrome.storage.local.remove(['tapfill_token', 'tapfill_user']);
         port.postMessage({ ok: false, error: 'NOT_CONNECTED', notConnected: true });
       } else {
@@ -150,6 +283,7 @@ async function handleGenerate(msg, port) {
 
     if (!res.ok) {
       if (res.status === 401) {
+        endExtensionSession(tokenData.access_token);
         chrome.storage.local.remove(['tapfill_token', 'tapfill_user']);
       }
       port.postMessage({
@@ -162,6 +296,14 @@ async function handleGenerate(msg, port) {
       return;
     }
 
+    // Refresh stored plan if server returned an updated value
+    if (data.plan) {
+      chrome.storage.local.get('tapfill_user', (stored) => {
+        if (stored.tapfill_user && stored.tapfill_user.plan !== data.plan) {
+          chrome.storage.local.set({ tapfill_user: { ...stored.tapfill_user, plan: data.plan } });
+        }
+      });
+    }
     port.postMessage({ ok: true, variants: data.variants, commentId: data.commentId });
   } catch (err) {
     port.postMessage({ ok: false, error: err.message });
