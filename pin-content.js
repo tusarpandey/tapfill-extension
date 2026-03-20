@@ -551,6 +551,16 @@
       }
       _lastCopied = true;
       closeTapMenu();
+      // Re-focus the comment box after menu removal.
+      // Pinterest collapses the contenteditable when focus leaves it, and React
+      // may replace the DOM node during text-insertion re-renders (making the old
+      // reference stale). Re-querying fresh + cancelling the hide timer keeps the
+      // field visible so the user can click Pinterest's own Post button.
+      clearTimeout(tapHideTimer);
+      requestAnimationFrame(() => {
+        const freshTextbox = document.querySelector(TEXTBOX_SEL);
+        if (freshTextbox) freshTextbox.focus();
+      });
     });
 
     addCanvasBtn.addEventListener('click', (e) => {
