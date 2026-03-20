@@ -208,18 +208,88 @@
       if (t && t.length > 5) return t.slice(0, 1000);
     }
 
-    // Strategy 2 — [dir="auto"] text blocks, excluding the comment textbox
+    // Strategy 2 — [dir="auto"] text blocks
+    // Exclude: the comment textbox, and elements inside known comment containers.
+    // Take the FIRST match (post text appears before comments in DOM order).
     const textbox = dialog.querySelector(TEXTBOX_SEL);
     const cands = [...dialog.querySelectorAll('[dir="auto"]')]
-      .filter(el => !el.contains(textbox) && !textbox?.contains(el))
+      .filter(el =>
+        !el.contains(textbox) &&
+        !textbox?.contains(el) &&
+        !el.closest('[aria-label*="comment" i]') &&
+        !el.closest('[data-testid*="comment" i]')
+      )
       .map(el => el.textContent.trim())
       .filter(t => t.length > 30);
 
-    if (cands.length) {
-      return cands.reduce((a, b) => a.length >= b.length ? a : b).slice(0, 1000);
-    }
+    if (cands.length) return cands[0].slice(0, 1000);
 
     return '';
+  }
+
+  // ─── Optimization helpers ──────────────────────────────────────────────────
+  //
+  //  Opt-1: scrapePostText already excludes existing comments (fixed above).
+  //  Opt-2: smart image sending — count meaningful caption words to decide
+  //         whether to include the post image in the API request.
+
+  // Count words that remain after stripping emojis, hashtags, @mentions, URLs.
+  function countMeaningfulWords(text) {
+    if (!text) return 0;
+    const cleaned = text
+      .replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, ' ')
+      .replace(/#\S+/g, ' ')
+      .replace(/@\S+/g, ' ')
+      .replace(/https?:\/\/\S+|www\.\S+/gi, ' ')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleaned ? cleaned.split(' ').filter(w => w.length > 1).length : 0;
+  }
+
+  // Facebook post image selectors (tried in order).
+  const FB_IMG_SELS = [
+    '[data-visualcompletion="media-vc-image"] img',
+    'img[data-imgperflogname="homefeed_image"]',
+    '[role="dialog"] img[src*="fbcdn"]:not([alt=""])',
+    '[role="dialog"] img[src*="scontent"]:not([alt=""])',
+  ];
+
+  // Fetch image, resize to ≤512 px, return JPEG data URL. Returns null on any failure.
+  async function extractPostImage(selectors, root) {
+    let imgEl = null;
+    for (const sel of selectors) {
+      const el = (root || document).querySelector(sel);
+      if (el?.src && !el.src.startsWith('data:') && !el.src.startsWith('blob:')) {
+        imgEl = el; break;
+      }
+    }
+    if (!imgEl) return null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(imgEl.src, { mode: 'cors', signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      if (blob.size > 5_000_000) return null;
+      const blobUrl = URL.createObjectURL(blob);
+      return await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 512;
+          const scale = Math.min(1, MAX / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+          const cv = document.createElement('canvas');
+          cv.width  = Math.round(img.naturalWidth  * scale);
+          cv.height = Math.round(img.naturalHeight * scale);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          URL.revokeObjectURL(blobUrl);
+          resolve(cv.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
+        img.src = blobUrl;
+      });
+    } catch { return null; }
   }
 
   // ─── Gemini API call ─────────────────────────────────────────────────────────
@@ -236,6 +306,26 @@
   async function generateAllVariants(postText, toneObj) {
     // Hinglish = transliterate Hindi client-side — always call API with 'hindi'
     const language = _selectedLanguage === 'hinglish' ? 'hindi' : _selectedLanguage;
+
+    // ── Opt-2: smart image sending ──────────────────────────────────────────
+    const wordCount = countMeaningfulWords(postText);
+    let imageMode = 'text-only';
+    let imageData  = null;
+    if (wordCount > 20) {
+      imageMode = 'text-only';
+      console.log(`[Tapfill] text-only mode — caption has ${wordCount} words`);
+    } else if (wordCount >= 1) {
+      imageMode = 'image+text';
+      console.log(`[Tapfill] image+text mode — caption has ${wordCount} words`);
+      imageData = await extractPostImage(FB_IMG_SELS, _menuActiveDialog || document);
+      if (!imageData) { console.log('[Tapfill] image extraction failed — falling back to text only'); imageMode = 'text-only'; }
+    } else {
+      imageMode = 'image-only';
+      console.log('[Tapfill] image-only mode — no meaningful caption found');
+      imageData = await extractPostImage(FB_IMG_SELS, _menuActiveDialog || document);
+      if (!imageData) { console.log('[Tapfill] image extraction failed — falling back to text only'); imageMode = 'text-only'; }
+    }
+
     return new Promise((resolve, reject) => {
       const port = chrome.runtime.connect({ name: 'AI_FETCH' });
       let settled = false;
@@ -260,7 +350,7 @@
         if (settled) return; settled = true;
         reject(new Error(chrome.runtime.lastError?.message || 'Port disconnected'));
       });
-      port.postMessage({ type: 'GENERATE', postText, tone: toneObj.tone, platform: 'facebook', language, tonePrompt: toneObj.tonePrompt || null });
+      port.postMessage({ type: 'GENERATE', postText, tone: toneObj.tone, platform: 'facebook', language, tonePrompt: toneObj.tonePrompt || null, imageMode, imageData });
     });
   }
 

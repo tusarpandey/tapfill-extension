@@ -263,6 +263,8 @@ async function handleGenerate(msg, port) {
         platform:   msg.platform || 'web',
         language:   msg.language || 'english',
         tonePrompt: msg.tonePrompt || null,
+        imageMode:  msg.imageMode  || 'text-only',
+        imageData:  msg.imageData  || null,
       }),
     });
 

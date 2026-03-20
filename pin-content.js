@@ -170,11 +170,90 @@
     return 'Interesting pin worth commenting on';
   }
 
+  // ─── Optimization helpers ──────────────────────────────────────────────────
+
+  function countMeaningfulWords(text) {
+    if (!text) return 0;
+    const cleaned = text
+      .replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, ' ')
+      .replace(/#\S+/g, ' ')
+      .replace(/@\S+/g, ' ')
+      .replace(/https?:\/\/\S+|www\.\S+/gi, ' ')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleaned ? cleaned.split(' ').filter(w => w.length > 1).length : 0;
+  }
+
+  const PIN_IMG_SELS = [
+    'img[elementtiming*="MainPinImage"]',
+    '[data-test-id="pin-closeup-image"] img',
+    '[data-test-id="closeup-image"] img',
+  ];
+
+  async function extractPostImage(selectors, root) {
+    let imgEl = null;
+    for (const sel of selectors) {
+      const el = (root || document).querySelector(sel);
+      if (el?.src && !el.src.startsWith('data:') && !el.src.startsWith('blob:')) {
+        imgEl = el; break;
+      }
+    }
+    if (!imgEl) return null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(imgEl.src, { mode: 'cors', signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      if (blob.size > 5_000_000) return null;
+      const blobUrl = URL.createObjectURL(blob);
+      return await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 512;
+          const scale = Math.min(1, MAX / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+          const cv = document.createElement('canvas');
+          cv.width  = Math.round(img.naturalWidth  * scale);
+          cv.height = Math.round(img.naturalHeight * scale);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          URL.revokeObjectURL(blobUrl);
+          resolve(cv.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
+        img.src = blobUrl;
+      });
+    } catch { return null; }
+  }
+
   // ─── SaaS API call — returns { subtle, balanced, bold, powerful } ────────────
   //  Energy switching is instant (no extra API calls).
 
   async function generateAllVariants(pinText, toneObj) {
     const language = _selectedLanguage === 'hinglish' ? 'hindi' : _selectedLanguage;
+
+    // ── Opt-2: smart image sending ──────────────────────────────────────────
+    // Skip the last-resort fallback text when counting meaningful words.
+    const rawText = pinText === 'Interesting pin worth commenting on' ? '' : pinText;
+    const wordCount = countMeaningfulWords(rawText);
+    let imageMode = 'text-only';
+    let imageData  = null;
+    if (wordCount > 20) {
+      imageMode = 'text-only';
+      console.log(`[Tapfill] text-only mode — caption has ${wordCount} words`);
+    } else if (wordCount >= 1) {
+      imageMode = 'image+text';
+      console.log(`[Tapfill] image+text mode — caption has ${wordCount} words`);
+      imageData = await extractPostImage(PIN_IMG_SELS, document);
+      if (!imageData) { console.log('[Tapfill] image extraction failed — falling back to text only'); imageMode = 'text-only'; }
+    } else {
+      imageMode = 'image-only';
+      console.log('[Tapfill] image-only mode — no meaningful caption found');
+      imageData = await extractPostImage(PIN_IMG_SELS, document);
+      if (!imageData) { console.log('[Tapfill] image extraction failed — falling back to text only'); imageMode = 'text-only'; }
+    }
+
     return new Promise((resolve, reject) => {
       const port = chrome.runtime.connect({ name: 'AI_FETCH' });
       let settled = false;
@@ -191,7 +270,7 @@
         if (settled) return; settled = true;
         reject(new Error(chrome.runtime.lastError?.message || 'Port disconnected'));
       });
-      port.postMessage({ type: 'GENERATE', postText: pinText, tone: toneObj.tone, platform: 'pinterest', language, tonePrompt: toneObj.tonePrompt || null });
+      port.postMessage({ type: 'GENERATE', postText: pinText, tone: toneObj.tone, platform: 'pinterest', language, tonePrompt: toneObj.tonePrompt || null, imageMode, imageData });
     });
   }
 
