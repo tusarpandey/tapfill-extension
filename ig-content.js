@@ -513,14 +513,15 @@
     function clampPosition() {
       requestAnimationFrame(() => requestAnimationFrame(() => {
         const mRect = menu.getBoundingClientRect();
-        const GAP = 8;
+        const vw    = document.documentElement.clientWidth;
+        const GAP   = 12;
         if (mRect.bottom > window.innerHeight - GAP) {
           const newTop = parseFloat(menu.style.top) - (mRect.bottom - (window.innerHeight - GAP));
           menu.style.top = `${Math.max(GAP, newTop)}px`;
         }
         if (parseFloat(menu.style.top) < GAP) menu.style.top = `${GAP}px`;
-        if (mRect.right > window.innerWidth - GAP) {
-          const newLeft = parseFloat(menu.style.left) - (mRect.right - (window.innerWidth - GAP));
+        if (mRect.right > vw - GAP) {
+          const newLeft = parseFloat(menu.style.left) - (mRect.right - (vw - GAP));
           menu.style.left = `${Math.max(GAP, newLeft)}px`;
         }
         if (parseFloat(menu.style.left) < GAP) menu.style.left = `${GAP}px`;
@@ -947,7 +948,7 @@
 
     if (top < GAP) top = bRect.bottom + GAP;
     if (top + ESTIMATED_H > window.innerHeight - GAP) top = Math.max(GAP, window.innerHeight - ESTIMATED_H - GAP);
-    if (left + POPUP_W > window.innerWidth - GAP) left = window.innerWidth - POPUP_W - GAP;
+    if (left + POPUP_W > document.documentElement.clientWidth - GAP) left = document.documentElement.clientWidth - POPUP_W - GAP;
     if (left < GAP) left = GAP;
 
     menu.style.top        = `${top}px`;
