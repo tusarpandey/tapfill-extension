@@ -151,6 +151,48 @@
     return '';
   }
 
+  // ─── Filmy tone enrichment ────────────────────────────────────────────────
+
+  const FILMY_DATA_URL = 'https://tapfill-saas.vercel.app/api/filmy-data';
+
+  async function getFilmyTonePrompt() {
+    try {
+      const res = await fetch(FILMY_DATA_URL, { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { movies } = await res.json();
+      if (!movies?.length) throw new Error('empty');
+
+      const movieBlocks = movies.map(m => {
+        const lines = [`Movie: ${m.movie_name}`];
+        if (m.lead_actors?.length)       lines.push(`Stars: ${m.lead_actors.join(', ')}`);
+        if (m.popular_dialogues?.length) lines.push(`Popular dialogues:\n${m.popular_dialogues.map(d => `  "${d}"`).join('\n')}`);
+        if (m.popular_songs?.length)     lines.push(`Songs: ${m.popular_songs.join(', ')}`);
+        if (m.viral_punch_words?.length) lines.push(`Viral phrases: ${m.viral_punch_words.join(', ')}`);
+        if (m.mood)  lines.push(`Mood: ${m.mood}`);
+        if (m.style) lines.push(`Style: ${m.style}`);
+        return lines.join('\n');
+      }).join('\n\n');
+
+      return (
+        `Generate a comment in Filmy Bollywood style.\n\n` +
+        `This week's latest Bollywood releases:\n\n` +
+        `${movieBlocks}\n\n` +
+        `Use the energy, dialogues and references from these latest movies to craft a comment that feels current and cinematic.\n` +
+        `Make it feel like this week's Bollywood — not old references.\n` +
+        `The comment should naturally reference one of these movies or their style.\n` +
+        `Keep it under 50 words.\n` +
+        `Sound like a real fan commenting — not an AI.`
+      );
+    } catch {
+      return (
+        `Generate a comment in Filmy Bollywood style.\n` +
+        `Use classic Bollywood references, dramatic dialogues, and cinematic energy.\n` +
+        `Make it feel like a movie scene.\n` +
+        `Keep it under 50 words.`
+      );
+    }
+  }
+
   // ─── Optimization helpers ──────────────────────────────────────────────────
 
   function countMeaningfulWords(text) {
@@ -213,6 +255,11 @@
 
   async function generateAllVariants(postText, toneObj) {
     const language = _selectedLanguage === 'hinglish' ? 'hindi' : _selectedLanguage;
+
+    // ── Filmy tone enrichment (Bollywood agent) ───────────────────────────
+    if (toneObj.label === 'Filmy') {
+      toneObj = { ...toneObj, tonePrompt: await getFilmyTonePrompt() };
+    }
 
     // ── Opt-2: smart image sending ──────────────────────────────────────────
     const wordCount = countMeaningfulWords(postText);
