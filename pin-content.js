@@ -119,12 +119,11 @@
 
   function insertTextReact(textbox, text) {
     textbox.focus();
-    // Use execCommand for both select-all and insert — this goes through the
-    // browser's editing interface that Pinterest's React has hooked into.
-    // Directly manipulating the DOM (textContent, Selection API + range) causes
-    // React's removeChild reconciliation crash because it replaces React-owned
-    // child nodes (placeholder spans etc.) that React still tracks internally.
-    document.execCommand('selectAll', false);
+    // Insert at the current cursor position WITHOUT any select-all or range
+    // manipulation. Pinterest's contenteditable has React-managed child nodes
+    // (placeholder spans etc.); replacing ALL content via selectAll/selectNodeContents
+    // destroys those nodes, causing React's removeChild reconciliation crash.
+    // The comment box is empty when the user generates, so plain insertText is safe.
     document.execCommand('insertText', false, text);
   }
 
@@ -540,19 +539,12 @@
       _lastCopied = true;
       closeTapMenu();
       clearTimeout(tapHideTimer);
-      // Wait 50 ms for React to finish any re-render triggered by text insertion,
-      // then re-focus the (potentially replaced) textbox. requestAnimationFrame is
-      // too early — it fires before React's state flush. The saved `textbox` ref
-      // is used as a fallback in case Pinterest's collapsed state removes the
-      // aria-label so the selector no longer matches.
-      setTimeout(() => {
-        const fresh = document.querySelector(TEXTBOX_SEL)
-          || (document.body.contains(textbox) ? textbox : null);
-        if (fresh) {
-          fresh.focus();
-          fresh.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      }, 50);
+      // Do NOT programmatically re-focus here. insertTextReact already focused
+      // the textbox. All menu buttons have e.preventDefault() on mousedown so
+      // focus never left the textbox during the entire menu interaction.
+      // closeTapMenu() removes a div that had no focus — it cannot trigger a
+      // focusout on the textbox. Extra focus() calls trigger Pinterest React
+      // re-renders that crash with removeChild errors.
     });
 
     addCanvasBtn.addEventListener('click', (e) => {
