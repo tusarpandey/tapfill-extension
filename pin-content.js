@@ -119,35 +119,13 @@
 
   function insertTextReact(textbox, text) {
     textbox.focus();
-
-    // Select all existing content via Selection API
-    const sel   = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(textbox);
-    sel.removeAllRanges();
-    sel.addRange(range);
-
-    // Replace selection with the generated comment.
-    // execCommand fires the synthetic input event React listens to.
-    const ok = document.execCommand('insertText', false, text);
-
-    // Fallback: if execCommand didn't insert the text (returns false or
-    // textbox is still empty), set content directly and fire an InputEvent.
-    if (!ok || !textbox.textContent.trim()) {
-      textbox.textContent = text;
-      textbox.dispatchEvent(new InputEvent('input', {
-        bubbles: true, cancelable: true, inputType: 'insertText', data: text,
-      }));
-    }
-
-    // Move caret to end
-    try {
-      const endRange = document.createRange();
-      endRange.selectNodeContents(textbox);
-      endRange.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(endRange);
-    } catch (_) { /* ignore if node was replaced by React re-render */ }
+    // Use execCommand for both select-all and insert — this goes through the
+    // browser's editing interface that Pinterest's React has hooked into.
+    // Directly manipulating the DOM (textContent, Selection API + range) causes
+    // React's removeChild reconciliation crash because it replaces React-owned
+    // child nodes (placeholder spans etc.) that React still tracks internally.
+    document.execCommand('selectAll', false);
+    document.execCommand('insertText', false, text);
   }
 
   // ─── Pin context scraper ─────────────────────────────────────────────────────
