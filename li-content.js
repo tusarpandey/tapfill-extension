@@ -34,7 +34,7 @@
     { emoji: '🌻', label: 'Warm',      desc: 'Genuine. Heart-first.',             tone: 'friendly',     temp: 0.5 },
     { emoji: '💎', label: 'Confident', desc: 'Direct. Clear. No second-guessing.', tone: 'supportive',  temp: 0.3 },
     { emoji: '😄', label: 'Witty',     desc: 'Sharp edge, light touch.',          tone: 'funny',        temp: 0.9 },
-    { emoji: '🎬', label: 'Filmy',     desc: 'Full cinematic. Dramatic flair.',   tone: 'disagree',     temp: 0.8 },
+    { emoji: '🎬', label: 'Filmy',     desc: 'Full cinematic. Dramatic flair.',   tone: 'filmy',        temp: 0.8 },
   ];
 
   const CREATOR_TONES = [
@@ -165,7 +165,7 @@
 
   // ─── Filmy tone enrichment ────────────────────────────────────────────────
 
-  const FILMY_DATA_URL = 'https://tapfill-saas.vercel.app/api/filmy-data';
+  const FILMY_DATA_URL = 'https://tapfill.io/api/filmy-data';
 
   async function getFilmyTonePrompt() {
     try {

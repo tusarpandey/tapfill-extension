@@ -35,7 +35,7 @@
     { emoji: '🌻', label: 'Warm',      desc: 'Genuine. Heart-first.',             tone: 'friendly',     temp: 0.5 },
     { emoji: '💎', label: 'Confident', desc: 'Direct. Clear. No second-guessing.', tone: 'supportive',  temp: 0.3 },
     { emoji: '😄', label: 'Witty',     desc: 'Sharp edge, light touch.',          tone: 'funny',        temp: 0.9 },
-    { emoji: '🎬', label: 'Filmy',     desc: 'Full cinematic. Dramatic flair.',   tone: 'disagree',     temp: 0.8 },
+    { emoji: '🎬', label: 'Filmy',     desc: 'Full cinematic. Dramatic flair.',   tone: 'filmy',        temp: 0.8 },
   ];
 
   const CREATOR_TONES = [
@@ -47,10 +47,50 @@
   ];
 
   let _userPlan = 'free';
+  // Load immediately and keep in sync
   chrome.storage.local.get('tapfill_user', (r) => { _userPlan = r.tapfill_user?.plan || 'free'; });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.tapfill_user) _userPlan = changes.tapfill_user.newValue?.plan || 'free';
   });
+  // Helper: always read fresh from storage before building menu
+  async function getUserPlan() {
+    // Read all possible storage keys at once
+    const stored = await new Promise(resolve =>
+      chrome.storage.local.get(['tapfill_user', 'tapfill_token'], resolve)
+    );
+    const cachedPlan = stored.tapfill_user?.plan;
+    const token      = stored.tapfill_token?.access_token;
+
+    console.log('[Tapfill] getUserPlan cached:', cachedPlan, '| token:', token ? 'yes' : 'no');
+
+    // If we have a token, always fetch fresh plan from API
+    if (token) {
+      try {
+        const res = await fetch('https://tapfill-saas.vercel.app/api/ext/profile', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          console.log('[Tapfill] getUserPlan API returned:', data.plan);
+          if (data.plan) {
+            // Always persist so future calls use cached value
+            const existing = stored.tapfill_user || {};
+            chrome.storage.local.set({ tapfill_user: { ...existing, plan: data.plan, email: data.email } });
+            return data.plan;
+          }
+        }
+      } catch (e) {
+        console.warn('[Tapfill] getUserPlan API fetch failed:', e);
+      }
+    }
+
+    // No token — extension not connected, show connect prompt
+    if (!token) {
+      console.warn('[Tapfill] Not connected — no token in storage. Please connect via popup.');
+    }
+
+    return cachedPlan || 'free';
+  }
 
   let _selectedLanguage = 'english';
   chrome.storage.local.get('tapfill_language', (r) => { _selectedLanguage = r.tapfill_language || 'english'; });
@@ -202,28 +242,68 @@
   //    3. Returns '' — the API will still work but without post context
 
   function scrapePostText(dialog) {
-    // Strategy 1 — known Facebook post / ad selectors
-    for (const sel of ['[data-ad-preview="message"]', '[data-testid="post_message"]']) {
-      const t = dialog.querySelector(sel)?.textContent.trim();
-      if (t && t.length > 5) return t.slice(0, 1000);
+    // Find the nearest article/post container — this scopes ALL searches to the
+    // current post only, preventing text from nearby posts bleeding in.
+    const textbox = dialog.querySelector(TEXTBOX_SEL);
+    const article = (
+      dialog.closest('[role="article"]') ||
+      dialog.closest('[data-pagelet]')   ||
+      textbox?.closest('[role="article"]') ||
+      textbox?.closest('[data-pagelet]')   ||
+      dialog
+    );
+
+    // Strategy 1 — known Facebook post message selectors, scoped to article
+    for (const sel of [
+      '[data-ad-preview="message"]',
+      '[data-testid="post_message"]',
+      '[data-ad-comet-preview="message"]',
+    ]) {
+      const el = article.querySelector(sel);
+      if (!el) continue;
+      const t = (el.innerText || el.textContent || '').trim();
+      if (t && t.length > 5) {
+        console.log('[Tapfill] scrapePostText S1 (' + sel + '):', t.slice(0, 80));
+        return t.slice(0, 1000);
+      }
     }
 
-    // Strategy 2 — [dir="auto"] text blocks
-    // Exclude: the comment textbox, and elements inside known comment containers.
-    // Take the FIRST match (post text appears before comments in DOM order).
-    const textbox = dialog.querySelector(TEXTBOX_SEL);
-    const cands = [...dialog.querySelectorAll('[dir="auto"]')]
+    // Returns true if text looks like a Facebook internal token/hash, not real language.
+    // Real sentences: multiple short words, mostly letters, natural spacing.
+    // Tokens: very long "words", digits mixed into letters, no sentence structure.
+    function looksLikeToken(t) {
+      const words = t.split(/\s+/).filter(w => w.length > 0);
+      if (!words.length) return true;
+      // If any single word is longer than 20 chars and contains digits → token
+      if (words.some(w => w.length > 20 && /\d/.test(w))) return true;
+      // Average word length > 15 → almost certainly not natural language
+      const avgLen = words.reduce((s, w) => s + w.length, 0) / words.length;
+      if (avgLen > 15) return true;
+      // Fewer than 2 real letter-only words of length 2+ → not a sentence
+      const realWords = words.filter(w => /^[\p{L}]{2,}$/u.test(w));
+      if (realWords.length < 2) return true;
+      return false;
+    }
+
+    // Strategy 2 — [dir="auto"] blocks WITHIN the article only
+    const cands = [...article.querySelectorAll('[dir="auto"]')]
       .filter(el =>
         !el.contains(textbox) &&
         !textbox?.contains(el) &&
         !el.closest('[aria-label*="comment" i]') &&
-        !el.closest('[data-testid*="comment" i]')
+        !el.closest('[data-testid*="comment" i]') &&
+        !el.closest('form')
       )
-      .map(el => el.textContent.trim())
-      .filter(t => t.length > 30);
+      .map(el => (el.innerText || el.textContent || '').trim())
+      .filter(t => t.length > 30 && !looksLikeToken(t));
 
-    if (cands.length) return cands[0].slice(0, 1000);
+    if (cands.length) {
+      console.log('[Tapfill] scrapePostText S2 (' + cands.length + ' cands):', cands[0].slice(0, 80));
+      return cands[0].slice(0, 1000);
+    }
 
+    // Strategy 3 — nothing found in this post (e.g. cover photo with no caption)
+    console.log('[Tapfill] scrapePostText: no text in post (image-only or cover photo)');
     return '';
   }
 
@@ -251,19 +331,49 @@
   const FB_IMG_SELS = [
     '[data-visualcompletion="media-vc-image"] img',
     'img[data-imgperflogname="homefeed_image"]',
-    '[role="dialog"] img[src*="fbcdn"]:not([alt=""])',
     '[role="dialog"] img[src*="scontent"]:not([alt=""])',
   ];
 
   // Fetch image, resize to ≤512 px, return JPEG data URL. Returns null on any failure.
   async function extractPostImage(selectors, root) {
     let imgEl = null;
+
+    // Strategy 1: known selectors within dialog root
     for (const sel of selectors) {
       const el = (root || document).querySelector(sel);
-      if (el?.src && !el.src.startsWith('data:') && !el.src.startsWith('blob:')) {
+      if (el?.src && !el.src.startsWith('data:') && !el.src.startsWith('blob:')
+          && el.naturalWidth >= 100) {
         imgEl = el; break;
       }
     }
+
+    // Strategy 2: walk up DOM from _menuActiveDialog to find the post image container
+    // This handles permalink pages where the image is outside the comment dialog
+    if (!imgEl && _menuActiveDialog) {
+      let node = _menuActiveDialog.parentElement;
+      for (let level = 0; level < 10 && node && node !== document.body; level++) {
+        const imgs = [...node.querySelectorAll('img[src*="scontent"]')]
+          .filter(el =>
+            el.src && !el.src.startsWith('data:') && !el.src.startsWith('blob:') &&
+            !el.src.includes('emg1') && !el.src.includes('/t13/') &&
+            !el.closest('[aria-label*="comment" i]') &&
+            !el.closest('form') &&
+            el.naturalWidth >= 200
+          );
+        if (imgs.length) {
+          // Pick the largest area image found at this DOM level
+          imgEl = imgs.reduce((b, e) =>
+            (e.naturalWidth * e.naturalHeight) > (b.naturalWidth * b.naturalHeight) ? e : b,
+            imgs[0]
+          );
+          console.log('[Tapfill] extractPostImage S2 level=' + level + ':', imgEl.src.slice(0, 80), imgEl.naturalWidth + 'x' + imgEl.naturalHeight);
+          break;
+        }
+        node = node.parentElement;
+      }
+    }
+
+    console.log('[Tapfill] extractPostImage final:', imgEl ? imgEl.src.slice(0, 80) + ' (' + imgEl.naturalWidth + 'x' + imgEl.naturalHeight + ')' : 'none');
     if (!imgEl) return null;
     try {
       const controller = new AbortController();
@@ -284,7 +394,9 @@
           cv.height = Math.round(img.naturalHeight * scale);
           cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
           URL.revokeObjectURL(blobUrl);
-          resolve(cv.toDataURL('image/jpeg', 0.8));
+          const dataUrl = cv.toDataURL('image/jpeg', 0.8);
+          console.log('[Tapfill] 📷 image encoded:', cv.width + 'x' + cv.height + ' → ' + Math.round(dataUrl.length / 1024) + ' KB base64');
+          resolve(dataUrl);
         };
         img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
         img.src = blobUrl;
@@ -297,7 +409,7 @@
   //  Fetches this week's Bollywood data and builds an enriched tonePrompt.
   //  Falls back to a generic Bollywood prompt if the endpoint is unreachable.
 
-  const FILMY_DATA_URL = 'https://tapfill-saas.vercel.app/api/filmy-data';
+  const FILMY_DATA_URL = 'https://tapfill.io/api/filmy-data';
 
   async function getFilmyTonePrompt() {
     try {
@@ -359,6 +471,13 @@
 
     // ── Opt-2: smart image sending ──────────────────────────────────────────
     const wordCount = countMeaningfulWords(postText);
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('[Tapfill] 🤖 GENERATING COMMENT');
+    console.log('  postText  :', postText || '(none)');
+    console.log('  tone      :', toneObj.tone, '|', toneObj.label);
+    console.log('  language  :', language);
+    console.log('  wordCount :', wordCount);
     let imageMode = 'text-only';
     let imageData  = null;
     if (wordCount > 20) {
@@ -375,6 +494,11 @@
       imageData = await extractPostImage(FB_IMG_SELS, _menuActiveDialog || document);
       if (!imageData) { console.log('[Tapfill] image extraction failed — falling back to text only'); imageMode = 'text-only'; }
     }
+
+    console.log('  imageMode :', imageMode);
+    console.log('  imageData :', imageData ? `yes (${imageData.length} chars)` : 'no');
+    console.log('  tonePrompt:', toneObj.tonePrompt ? `yes (${toneObj.tonePrompt.length} chars)` : 'no');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     return new Promise((resolve, reject) => {
       const port = chrome.runtime.connect({ name: 'AI_FETCH' });
@@ -393,6 +517,9 @@
             ? `${response.error} | ${response.detail}`
             : (response?.error || 'AI request failed');
           return reject(new Error(msg));
+        }
+        if (response.imageDescription) {
+          console.log('[Tapfill] 🖼️  IMAGE SEEN BY AI:', response.imageDescription);
         }
         resolve({ variants: response.variants, commentId: response.commentId || null, toneOrder: response.toneOrder || null });
       });
@@ -611,6 +738,7 @@
   //  Clicking a ready row injects the text into the comment box.
 
   let _menuActiveDialog = null;
+  let _menuArticle      = null;   // nearest [role="article"] for the active post
   let _menuPostText     = '';
 
   function buildTapMenu() {
@@ -1309,12 +1437,32 @@
 
   // ─── Open / close #tap-menu ───────────────────────────────────────────────────
 
-  function openTapMenu(tapRootBtn) {
+  async function openTapMenu(tapRootBtn) {
     closeTapMenu();
 
     _menuActiveDialog = tapRootBtn._tapDialog || null;
+    // Scope all image extraction to the nearest article/post container
+    _menuArticle = (
+      tapRootBtn.closest('[role="article"]') ||
+      tapRootBtn.closest('[data-pagelet]')   ||
+      _menuActiveDialog?.closest('[role="article"]') ||
+      _menuActiveDialog?.closest('[data-pagelet]')   ||
+      _menuActiveDialog ||
+      null
+    );
+    console.log('[Tapfill] _menuArticle:', _menuArticle?.tagName, _menuArticle?.getAttribute('role'), _menuArticle?.getAttribute('data-pagelet'), '| imgs inside:', _menuArticle?.querySelectorAll('img').length);
     _menuPostText     = scrapePostText(_menuActiveDialog ?? document.body);
     _canvasItems      = []; // fresh canvas for every new post/session
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('[Tapfill] 📥 POST DATA SCRAPED');
+    console.log('  postText :', _menuPostText || '(none)');
+    console.log('  words    :', countMeaningfulWords(_menuPostText));
+    console.log('  url      :', window.location.href.slice(0, 80));
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // Always read fresh plan from storage so creator tones show correctly
+    _userPlan = await getUserPlan();
 
     const { menu } = buildTapMenu();
 
@@ -1346,6 +1494,7 @@
     document.getElementById(TAP_MENU_ID)?.remove();
     document.removeEventListener('click', onClickAway, true);
     _menuActiveDialog = null;
+    _menuArticle      = null;
     _menuPostText     = '';
   }
 
