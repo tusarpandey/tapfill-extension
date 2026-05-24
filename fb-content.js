@@ -23,7 +23,7 @@
 
   const TAP_ROOT_ID = 'tap-root';
   const TAP_MENU_ID = 'tap-menu';
-  const STICKER_SEL = '[aria-label="Comment with a Sticker"]';
+  const STICKER_SEL = '[aria-label="Comment with a sticker"], [aria-label="Comment with a Sticker"]';
   const TEXTBOX_SEL = '[contenteditable="true"][role="textbox"]';
 
   // Temperature mapping:
@@ -31,7 +31,7 @@
   //   mid  (0.5) → balanced
   //   high (0.9) → high-variance, creative, witty
   const TONES = [
-    { emoji: '🎩', label: 'Classic',   desc: 'Polished and timeless.',            tone: 'professional', temp: 0.2 },
+    { emoji: '🎩', label: 'Classic',   desc: 'Polished and timeless.',            tone: 'classic',      temp: 0.2 },
     { emoji: '🌻', label: 'Warm',      desc: 'Genuine. Heart-first.',             tone: 'friendly',     temp: 0.5 },
     { emoji: '💎', label: 'Confident', desc: 'Direct. Clear. No second-guessing.', tone: 'supportive',  temp: 0.3 },
     { emoji: '😄', label: 'Witty',     desc: 'Sharp edge, light touch.',          tone: 'funny',        temp: 0.9 },
