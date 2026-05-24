@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tapfill</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 360px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #eef2ff;
+      color: #1A1A3E;
+    }
+
+    /* ── Handle bar (like mobile bottom sheet) ──────────────────────────────── */
+    .handle-bar {
+      width: 40px; height: 4px;
+      background: #c7d2fe; border-radius: 2px;
+      margin: 10px auto 0;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────────── */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px 8px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 8px; }
+    .header-logo img { height: 30px; width: auto; }
+    .header-wordmark {
+      font-size: 14px; font-weight: 800; color: #6366f1; letter-spacing: -0.3px;
+    }
+    .status-dot {
+      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+    }
+    .dot-green  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+    .dot-grey   { background: #d1d5db; }
+    .dot-orange { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.2); }
+
+    /* ── Body ────────────────────────────────────────────────────────────────── */
+    .body { padding: 0 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+
+    /* ── Card ────────────────────────────────────────────────────────────────── */
+    .card {
+      background: #ffffff; border-radius: 16px; padding: 14px 16px;
+      border: 1px solid rgba(99,102,241,0.1);
+      box-shadow: 0 4px 12px rgba(99,102,241,0.07);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+
+    /* ── Section label ───────────────────────────────────────────────────────── */
+    .section-label {
+      font-size: 9px; font-weight: 800; color: #6366f1;
+      letter-spacing: 1.3px; text-transform: uppercase;
+    }
+
+    /* ── User card ───────────────────────────────────────────────────────────── */
+    .user-email { font-size: 11px; color: #9B9BAD; margin-bottom: 1px; }
+    .user-name  { font-size: 14px; font-weight: 700; color: #1A1A3E; }
+    .plan-badge {
+      display: inline-block; margin-top: 5px;
+      font-size: 10px; font-weight: 600;
+      background: rgba(99,102,241,0.08); color: #6366f1;
+      border-radius: 20px; padding: 2px 10px;
+      text-transform: capitalize; border: 1px solid rgba(99,102,241,0.15);
+    }
+
+    /* ── Usage bar ───────────────────────────────────────────────────────────── */
+    .usage-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 11px; color: #9B9BAD; margin-bottom: 5px;
+    }
+    .usage-count-val { color: #1A1A3E; font-weight: 600; }
+    .usage-bg {
+      height: 5px; background: rgba(99,102,241,0.1);
+      border-radius: 3px; overflow: hidden;
+    }
+    .usage-fill-wrap { display: flex; height: 100%; }
+    .usage-fill-comment { height: 100%; background: #6366f1; transition: width 0.3s; }
+    .usage-fill-caption { height: 100%; background: #f59e0b; transition: width 0.3s; }
+    .usage-legend { display: flex; gap: 12px; margin-top: 5px; }
+    .legend-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #9B9BAD; }
+    .legend-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Energy row ──────────────────────────────────────────────────────────── */
+    .energy-row {
+      display: flex; justify-content: space-around;
+      position: relative; padding: 2px 0 4px;
+    }
+    .energy-track {
+      position: absolute; top: 13px; left: 26px; right: 26px;
+      height: 2px; background: rgba(99,102,241,0.12); border-radius: 1px; z-index: 0;
+    }
+    .energy-item {
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      cursor: pointer; position: relative; z-index: 1; flex: 1; user-select: none;
+    }
+    .energy-dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid; transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .energy-item.active .energy-dot {
+      transform: scale(1.15);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.18);
+    }
+    .energy-lbl {
+      font-size: 9px; text-align: center; line-height: 1.3; transition: font-weight 0.1s;
+    }
+    .energy-item.active .energy-lbl { font-weight: 700; }
+
+    /* ── Language pills ──────────────────────────────────────────────────────── */
+    .lang-row { display: flex; gap: 6px; }
+    .lang-btn {
+      flex: 1; padding: 9px 4px; border-radius: 30px;
+      border: 1.5px solid #d1d5db; background: #f9fafb;
+      color: #374151; font-size: 12px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+      text-align: center; transition: all 0.15s;
+    }
+    .lang-btn.active {
+      border-color: #6366f1; background: #eef2ff; color: #6366f1;
+    }
+    .lang-btn:hover:not(.active) { border-color: #c7d2fe; }
+
+    /* ── Action buttons ──────────────────────────────────────────────────────── */
+    .btn {
+      display: block; width: 100%; padding: 11px 0;
+      border-radius: 30px; border: none; font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit; text-align: center;
+      transition: opacity 0.15s;
+    }
+    .btn:active { opacity: 0.8; }
+    .btn-primary {
+      background: linear-gradient(135deg,#818cf8,#5B54F5);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+    }
+    .btn-outline {
+      background: transparent; color: #6366f1;
+      border: 1.5px solid #6366f1;
+    }
+    .btn-ghost {
+      background: transparent; color: #9B9BAD;
+      border: 1px solid rgba(0,0,0,0.07); font-size: 12px;
+    }
+
+    /* ── Not connected ───────────────────────────────────────────────────────── */
+    .not-connected { text-align: center; padding: 4px 0; }
+    .not-connected .nc-icon { font-size: 36px; margin-bottom: 12px; }
+    .not-connected h3 { font-size: 15px; font-weight: 800; color: #1A1A3E; margin-bottom: 6px; }
+    .not-connected p  { font-size: 12px; color: #9B9BAD; line-height: 1.6; margin-bottom: 16px; }
+
+    /* ── Loading ─────────────────────────────────────────────────────────────── */
+    .loading { text-align: center; padding: 28px 0; color: #9B9BAD; font-size: 12px; }
+    .spinner {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2.5px solid #6366f1; border-top-color: transparent;
+      animation: spin 0.7s linear infinite; margin: 0 auto 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Footer ──────────────────────────────────────────────────────────────── */
+    .footer {
+      font-size: 9px; color: #9B9BAD; text-align: center;
+      padding: 0 16px 12px; letter-spacing: 0.6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="handle-bar"></div>
+
+  <div class="header">
+    <div class="header-logo">
+      <img src="icons/icon-48.png" alt="Tapfill" />
+      <span class="header-wordmark">tapfill</span>
+    </div>
+    <div id="statusDot" class="status-dot dot-grey"></div>
+  </div>
+
+  <div class="body">
+
+    <!-- Loading -->
+    <div id="loadingView" class="loading">
+      <div class="spinner"></div>
+      Checking connection…
+    </div>
+
+    <!-- ── Connected view ──────────────────────────────────────────────────── -->
+    <div id="connectedView" style="display:none; flex-direction:column; gap:8px;">
+
+      <!-- User + usage card -->
+      <div class="card" style="gap:8px;">
+        <div>
+          <div class="user-email" id="userEmail">—</div>
+          <div class="user-name"  id="userName">—</div>
+          <span class="plan-badge" id="planBadge">free</span>
+        </div>
+        <div>
+          <div class="usage-row">
+            <span id="usagePeriodLabel">Used today</span>
+            <span class="usage-count-val">
+              <span id="usedCount">—</span> / <span id="usageLimit">—</span>
+            </span>
+          </div>
+          <div class="usage-bg">
+            <div class="usage-fill-wrap">
+              <div class="usage-fill-comment" id="usageFillComment" style="width:0%"></div>
+              <div class="usage-fill-caption" id="usageFillCaption" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="usage-legend">
+            <div class="legend-item">
+              <div class="legend-dot" style="background:#6366f1;"></div>
+              <span id="commentCountLbl">Comments 0</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background:#f59e0b;"></div>
+              <span id="captionCountLbl">Captions 0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Energy card -->
+      <div class="card">
+        <div class="section-label">Energy Level</div>
+        <div class="energy-row">
+          <div class="energy-track"></div>
+          <div class="energy-item" data-energy="subtle">
+            <div class="energy-dot" style="background:#ede9fe; border-color:#c4b5fd;"></div>
+            <span class="energy-lbl" style="color:#a78bfa;">Subtle</span>
+          </div>
+          <div class="energy-item" data-energy="balanced">
+            <div class="energy-dot" style="background:#c7d2fe; border-color:#818cf8;"></div>
+            <span class="energy-lbl" style="color:#818cf8;">Balanced</span>
+          </div>
+          <div class="energy-item" data-energy="bold">
+            <div class="energy-dot" style="background:#818cf8; border-color:#6366f1;"></div>
+            <span class="energy-lbl" style="color:#6366f1;">Bold</span>
+          </div>
+          <div class="energy-item" data-energy="powerful">
+            <div class="energy-dot" style="background:#6366f1; border-color:#4338ca;"></div>
+            <span class="energy-lbl" style="color:#4338ca;">Powerful</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Language card -->
+      <div class="card">
+        <div class="section-label">Language</div>
+        <div class="lang-row">
+          <button class="lang-btn" data-lang="english">English</button>
+          <button class="lang-btn" data-lang="hindi">Hindi</button>
+          <button class="lang-btn" data-lang="hinglish">Hinglish</button>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <button class="btn btn-outline" id="openDashboardBtn">Open Dashboard ↗</button>
+      <button class="btn btn-ghost"   id="logoutBtn">Disconnect</button>
+
+    </div><!-- /connectedView -->
+
+    <!-- ── Not connected view ──────────────────────────────────────────────── -->
+    <div id="notConnectedView" class="card not-connected" style="display:none;">
+      <div class="nc-icon">🔗</div>
+      <h3>Connect your account</h3>
+      <p>Sign in to Tapfill so your comments are saved, personalised, and tracked in your dashboard.</p>
+      <button class="btn btn-primary" id="connectBtn">Sign in via Tapfill →</button>
+    </div>
+
+  </div><!-- /body -->
+
+  <div class="footer">tapfill.io · Never struggle to comment again.</div>
+  <script src="popup.js"></script>
+</body>
+</html>
