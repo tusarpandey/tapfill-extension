@@ -791,7 +791,7 @@
     langSection.appendChild(langRow);
 
     const langPicker = document.createElement('div');
-    Object.assign(langPicker.style, { display: 'none', marginTop: '8px', borderTop: '1px solid rgba(99,102,241,0.1)', paddingTop: '8px' });
+    Object.assign(langPicker.style, { display: 'none', marginTop: '8px', borderTop: '1px solid rgba(99,102,241,0.1)', paddingTop: '8px', maxHeight: '160px', overflowY: 'auto' });
     langSection.appendChild(langPicker);
 
     let _activeLangBtn = null;
@@ -878,8 +878,16 @@
 
     changeLangBtn.addEventListener('click', () => {
       _pickerOpen = !_pickerOpen;
-      if (_pickerOpen) { renderPicker(); langPicker.style.display = 'block'; changeLangBtn.textContent = '✕ Close'; }
-      else { langPicker.style.display = 'none'; changeLangBtn.textContent = '✎ Change'; }
+      if (_pickerOpen) {
+        renderPicker(); langPicker.style.display = 'block'; changeLangBtn.textContent = '✕ Close';
+        requestAnimationFrame(() => {
+          const GAP = 8, vh = window.innerHeight;
+          const mRect = menu.getBoundingClientRect();
+          if (mRect.bottom > vh - GAP) {
+            menu.style.top = `${Math.max(GAP, parseFloat(menu.style.top) - (mRect.bottom - (vh - GAP)))}px`;
+          }
+        });
+      } else { langPicker.style.display = 'none'; changeLangBtn.textContent = '✎ Change'; }
     });
 
     chrome.storage.local.get('tapfill_chip_languages', (r) => {
