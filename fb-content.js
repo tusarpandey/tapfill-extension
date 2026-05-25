@@ -1164,41 +1164,70 @@
     const canvasView = document.createElement('div');
     Object.assign(canvasView.style, {
       display: 'none', flexDirection: 'column',
-      // flex: 1 + minHeight: 0 lets it shrink inside the height-capped menu
       flex: '1', minHeight: '0', overflow: 'hidden', paddingBottom: '10px',
     });
-    // Prevent any click inside canvas view from stealing focus off the textbox
     canvasView.addEventListener('mousedown', e => e.preventDefault());
     menu.appendChild(canvasView);
 
-    // Header: [logo img] tapfill · My Canvas
+    // ── Canvas header: deep navy with glow
     const cvHdr = document.createElement('div');
     Object.assign(cvHdr.style, {
-      display: 'flex', alignItems: 'center', gap: '7px',
-      paddingBottom: '10px', borderBottom: '1px solid #f1f5f9', marginBottom: '10px',
+      background: 'linear-gradient(135deg,#050816,#0B1023,#171B46)',
+      borderRadius: '12px', marginBottom: '10px',
+      padding: '12px 14px', position: 'relative', overflow: 'hidden',
     });
-    const cvLogoImg = document.createElement('img');
-    cvLogoImg.src = LOGO_URL;
-    cvLogoImg.style.cssText = 'height:18px;width:auto;display:block';
+    // Glow blobs
+    const cvGlow1 = document.createElement('div');
+    Object.assign(cvGlow1.style, {
+      position: 'absolute', top: '-20px', left: '-20px', width: '80px', height: '80px',
+      borderRadius: '50%', background: 'rgba(99,102,241,0.2)', pointerEvents: 'none',
+    });
+    const cvGlow2 = document.createElement('div');
+    Object.assign(cvGlow2.style, {
+      position: 'absolute', bottom: '-15px', right: '-15px', width: '60px', height: '60px',
+      borderRadius: '50%', background: 'rgba(139,92,246,0.15)', pointerEvents: 'none',
+    });
+    // Logo icon
+    const cvLogoIcon = document.createElement('div');
+    Object.assign(cvLogoIcon.style, {
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: '28px', height: '28px', borderRadius: '8px',
+      background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(139,92,246,0.4)',
+      boxShadow: '0 0 10px rgba(139,92,246,0.4)', marginRight: '10px',
+      fontSize: '12px', fontWeight: '800', color: '#fff', verticalAlign: 'middle', flexShrink: '0',
+    });
+    cvLogoIcon.textContent = 'T';
+    const cvTextWrap = document.createElement('div');
+    Object.assign(cvTextWrap.style, { display: 'inline-flex', flexDirection: 'column', verticalAlign: 'middle' });
     const cvWordmark = document.createElement('span');
-    cvWordmark.textContent = 'tapfill';
-    Object.assign(cvWordmark.style, { fontSize: '13px', fontWeight: '700', color: '#6366f1' });
-    const cvSep = document.createElement('span');
-    cvSep.textContent = '·';
-    Object.assign(cvSep.style, { color: '#cbd5e1', fontSize: '13px' });
+    cvWordmark.textContent = 'Tapfill';
+    Object.assign(cvWordmark.style, {
+      fontSize: '12px', fontWeight: '800', color: '#fff', lineHeight: '1.2',
+      textShadow: '0 0 12px rgba(139,92,246,0.55)',
+    });
+    const cvDivider = document.createElement('div');
+    Object.assign(cvDivider.style, {
+      height: '1px', background: 'rgba(255,255,255,0.18)', margin: '4px 0 3px',
+    });
     const cvTitle = document.createElement('span');
-    cvTitle.textContent = 'My Canvas';
-    Object.assign(cvTitle.style, { fontSize: '13px', fontWeight: '600', color: '#1e293b' });
-    cvHdr.append(cvLogoImg, cvWordmark, cvSep, cvTitle);
+    cvTitle.textContent = 'MY COMMENT CANVAS';
+    Object.assign(cvTitle.style, {
+      fontSize: '7px', fontWeight: '600', color: 'rgba(216,180,254,0.85)',
+      letterSpacing: '2px',
+    });
+    cvTextWrap.append(cvWordmark, cvDivider, cvTitle);
+    const cvHdrInner = document.createElement('div');
+    Object.assign(cvHdrInner.style, { display: 'flex', alignItems: 'center', position: 'relative', zIndex: '1' });
+    cvHdrInner.append(cvLogoIcon, cvTextWrap);
+    cvHdr.append(cvGlow1, cvGlow2, cvHdrInner);
     canvasView.appendChild(cvHdr);
 
-    // Scrollable comment list — flex:1 + minHeight:0 makes it scroll within the
-    // height-capped canvasView; the footer is always pinned below it.
+    // Scrollable comment list
     const cvList = document.createElement('div');
     Object.assign(cvList.style, {
       flex: '1', minHeight: '0', overflowY: 'auto',
       display: 'flex', flexDirection: 'column', gap: '8px',
-      padding: '2px 0 6px',   // breathing room at top and bottom
+      padding: '2px 0 6px',
     });
     canvasView.appendChild(cvList);
 
@@ -1206,13 +1235,15 @@
     const cvFooter = document.createElement('div');
     Object.assign(cvFooter.style, {
       display: 'flex', gap: '6px',
-      paddingTop: '10px', paddingBottom: '2px', borderTop: '1px solid #f1f5f9',
+      paddingTop: '10px', paddingBottom: '2px',
+      borderTop: '1px solid rgba(139,92,246,0.1)',
     });
     const backBtn = mkBtn('← Back', {
       border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b',
     });
     const shareBtn = mkBtn('Share 📤', {
-      border: 'none', background: 'linear-gradient(135deg,#6366f1,#818cf8)', color: '#fff',
+      border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff',
+      boxShadow: '0 3px 12px rgba(99,102,241,0.3)',
     });
     backBtn.addEventListener('click', () => showMainView());
     shareBtn.addEventListener('click', () => shareCanvasAsImage(shareBtn));
@@ -1278,34 +1309,51 @@
       _canvasItems.forEach(item => {
         const card = document.createElement('div');
         Object.assign(card.style, {
-          display: 'flex', alignItems: 'flex-start', gap: '8px',
-          padding: '10px', background: '#f8fafc',
-          borderRadius: '12px', border: '1px solid #e2e8f0',
+          background: '#fff', borderRadius: '14px',
+          boxShadow: '0 2px 14px rgba(99,102,241,0.08), 0 1px 3px rgba(0,0,0,0.04)',
+          overflow: 'hidden',
         });
-        // Left meta
-        const meta = document.createElement('div');
-        Object.assign(meta.style, {
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
-          gap: '3px', minWidth: '36px',
+        // Card top: badge strip
+        const cardTop = document.createElement('div');
+        Object.assign(cardTop.style, {
+          display: 'flex', gap: '5px', flexWrap: 'wrap',
+          padding: '9px 12px 7px', background: '#fafbff',
+          borderBottom: '1px solid rgba(139,92,246,0.06)',
         });
-        const emojiEl  = document.createElement('span');
-        emojiEl.textContent = item.toneEmoji;
-        emojiEl.style.fontSize = '18px';
-        const lblTone  = document.createElement('span');
-        lblTone.textContent = item.toneLabel;
-        Object.assign(lblTone.style, { fontSize: '8px', color: '#6366f1', fontWeight: '600', textAlign: 'center' });
-        const lblEnergy = document.createElement('span');
-        lblEnergy.textContent = item.energyLabel;
-        Object.assign(lblEnergy.style, { fontSize: '8px', color: '#94a3b8', textAlign: 'center' });
-        meta.append(emojiEl, lblTone, lblEnergy);
-        // Text
+        // Tone badge (lavender)
+        const toneBadge = document.createElement('span');
+        toneBadge.textContent = `${item.toneEmoji} ${item.toneLabel}`;
+        Object.assign(toneBadge.style, {
+          fontSize: '9px', fontWeight: '700', color: '#7C3AED',
+          background: 'rgba(139,92,246,0.1)', padding: '2px 8px', borderRadius: '20px',
+        });
+        // Energy badge (mint)
+        const energyBadge = document.createElement('span');
+        energyBadge.textContent = item.energyLabel;
+        Object.assign(energyBadge.style, {
+          fontSize: '9px', fontWeight: '600', color: '#059669',
+          background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: '20px',
+        });
+        cardTop.append(toneBadge, energyBadge);
+
+        // Card body: text + discard
+        const cardBody = document.createElement('div');
+        Object.assign(cardBody.style, {
+          display: 'flex', alignItems: 'flex-start', gap: '6px', padding: '10px 12px',
+        });
         const textEl = document.createElement('p');
-        Object.assign(textEl.style, { margin: '0', flex: '1', fontSize: '12px', lineHeight: '1.55', color: '#1e293b', wordBreak: 'break-word' });
+        Object.assign(textEl.style, {
+          margin: '0', flex: '1', fontSize: '12px', lineHeight: '1.65',
+          color: '#0F172A', wordBreak: 'break-word',
+        });
         textEl.textContent = item.text;
-        // Discard
         const discardBtn = document.createElement('button');
         discardBtn.type = 'button'; discardBtn.textContent = '×';
-        Object.assign(discardBtn.style, { background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: '16px', lineHeight: '1', padding: '0 2px', fontFamily: 'inherit', flexShrink: '0' });
+        Object.assign(discardBtn.style, {
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: '#cbd5e1', fontSize: '16px', lineHeight: '1',
+          padding: '0 2px', fontFamily: 'inherit', flexShrink: '0',
+        });
         discardBtn.addEventListener('mousedown', e => e.preventDefault());
         discardBtn.addEventListener('mouseenter', () => { discardBtn.style.color = '#ef4444'; });
         discardBtn.addEventListener('mouseleave', () => { discardBtn.style.color = '#cbd5e1'; });
@@ -1313,7 +1361,8 @@
           _canvasItems = _canvasItems.filter(c => c.id !== item.id);
           renderCanvasInline();
         });
-        card.append(meta, textEl, discardBtn);
+        cardBody.append(textEl, discardBtn);
+        card.append(cardTop, cardBody);
         cvList.appendChild(card);
       });
     }
