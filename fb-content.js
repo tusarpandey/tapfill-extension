@@ -817,10 +817,10 @@
     });
     menu.appendChild(langRow);
 
-    // ── Write with AI button (appears after tone chip is selected) ────────────
+    // ── Express with AI button (appears after tone chip is selected) ────────────
     const writeBtn = document.createElement('button');
     writeBtn.type = 'button';
-    writeBtn.textContent = '✦ Write with AI';
+    writeBtn.textContent = '✦ Express with AI';
     Object.assign(writeBtn.style, {
       display: 'none', marginTop: '10px', width: '100%',
       padding: '11px 0', borderRadius: '12px',
@@ -1561,7 +1561,7 @@
         chip.style.background  = '#eef2ff';
         chip.style.borderColor = '#818cf8';
         labelEl.style.color    = '#6366f1';
-        writeBtn.textContent   = `✦ Write with AI · ${toneObj.emoji} ${toneObj.label}`;
+        writeBtn.textContent   = `✦ Express with AI · ${toneObj.emoji} ${toneObj.label}`;
         writeBtn.style.display = '';
       });
     });
