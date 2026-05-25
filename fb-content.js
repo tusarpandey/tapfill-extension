@@ -575,7 +575,7 @@
   let _canvasItems = []; // { id, text, toneEmoji, toneLabel, energyLabel }
 
   // Draws all saved comments onto a <canvas> element and copies as PNG to clipboard.
-  async function shareCanvasAsImage(shareBtn) {
+  async function buildCanvasBlob() {
     if (!_canvasItems.length) return;
 
     const W = 380, PAD = 18, CARD_GAP = 12, LINE_H = 19, EMO_W = 80;
@@ -698,35 +698,7 @@
     ctx.font = `9px ${ff}`; ctx.fillStyle = '#94a3b8';
     ctx.fillText('tapfill.io', W - PAD - ctx.measureText('tapfill.io').width, fy);
 
-    // ── Copy to clipboard (download fallback if CSP blocks clipboard) ──────────
-    cv.toBlob(async blob => {
-      const orig = shareBtn ? shareBtn.textContent : '';
-      const url = URL.createObjectURL(blob);
-      const triggerDownload = () => {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'tapfill-canvas.png';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-        if (shareBtn) {
-          shareBtn.textContent = '✓ Downloaded!';
-          setTimeout(() => { shareBtn.textContent = orig; }, 2500);
-        }
-      };
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        URL.revokeObjectURL(url);
-        if (shareBtn) {
-          shareBtn.textContent = '✓ Copied!';
-          setTimeout(() => { shareBtn.textContent = orig; }, 2000);
-        }
-      } catch (e) {
-        console.warn('[Tapfill] clipboard blocked, downloading instead:', e.message);
-        triggerDownload();
-      }
-    }, 'image/png');
+    return new Promise(resolve => cv.toBlob(resolve, 'image/png'));
   }
 
   // ─── Build #tap-menu (rebuilt fresh on every open) ───────────────────────────
@@ -1238,16 +1210,86 @@
       paddingTop: '10px', paddingBottom: '2px',
       borderTop: '1px solid rgba(139,92,246,0.1)',
     });
+
+    let _capturedBlob = null;
+
+    // Always-visible back button (resets to stage 1 on click)
     const backBtn = mkBtn('← Back', {
       border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b',
+      flex: '0 0 auto', padding: '7px 12px',
     });
-    const shareBtn = mkBtn('Share 📤', {
-      border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff',
-      boxShadow: '0 3px 12px rgba(99,102,241,0.3)',
+
+    // Stage 1: single "Save as Image" CTA
+    const saveImgBtn = mkBtn('📸 Save as Image', {
+      border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+      color: '#fff', boxShadow: '0 3px 12px rgba(99,102,241,0.3)',
     });
-    backBtn.addEventListener('click', () => showMainView());
-    shareBtn.addEventListener('click', () => shareCanvasAsImage(shareBtn));
-    cvFooter.append(backBtn, shareBtn);
+
+    // Stage 2: Save (download) + Share
+    const dlBtn = mkBtn('💾 Save', {
+      border: '1.5px solid #6366f1', background: 'transparent', color: '#6366f1',
+    });
+    const shareApiBtn = mkBtn('↗ Share', {
+      border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+      color: '#fff', boxShadow: '0 3px 12px rgba(99,102,241,0.3)',
+    });
+    dlBtn.style.display = 'none';
+    shareApiBtn.style.display = 'none';
+
+    function resetToStage1() {
+      _capturedBlob = null;
+      saveImgBtn.textContent = '📸 Save as Image';
+      saveImgBtn.disabled = false;
+      saveImgBtn.style.display = '';
+      dlBtn.style.display = 'none';
+      shareApiBtn.style.display = 'none';
+    }
+
+    backBtn.addEventListener('click', () => { resetToStage1(); showMainView(); });
+
+    saveImgBtn.addEventListener('click', async () => {
+      if (!_canvasItems.length) return;
+      saveImgBtn.textContent = '⏳ Generating…';
+      saveImgBtn.disabled = true;
+      try {
+        _capturedBlob = await buildCanvasBlob();
+        if (!_capturedBlob) { resetToStage1(); return; }
+        // Transition to stage 2
+        saveImgBtn.style.display = 'none';
+        dlBtn.style.display = '';
+        shareApiBtn.style.display = '';
+      } catch { resetToStage1(); }
+    });
+
+    dlBtn.addEventListener('click', () => {
+      if (!_capturedBlob) return;
+      const url = URL.createObjectURL(_capturedBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'tapfill-canvas.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      const orig = dlBtn.textContent;
+      dlBtn.textContent = '✓ Saved!';
+      setTimeout(() => { dlBtn.textContent = orig; }, 2000);
+    });
+
+    shareApiBtn.addEventListener('click', async () => {
+      if (!_capturedBlob) return;
+      const file = new File([_capturedBlob], 'tapfill-canvas.png', { type: 'image/png' });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'My Tapfill Canvas' });
+        } else {
+          // Fallback: copy to clipboard
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': _capturedBlob })]);
+          const orig = shareApiBtn.textContent;
+          shareApiBtn.textContent = '✓ Copied!';
+          setTimeout(() => { shareApiBtn.textContent = orig; }, 2000);
+        }
+      } catch { dlBtn.click(); }  // final fallback: trigger download
+    });
+
+    cvFooter.append(backBtn, saveImgBtn, dlBtn, shareApiBtn);
     canvasView.appendChild(cvFooter);
 
     // ── View-switching helpers ────────────────────────────────────────────────

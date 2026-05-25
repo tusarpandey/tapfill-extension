@@ -749,11 +749,68 @@
     // Footer buttons
     const cvFooter = document.createElement('div');
     Object.assign(cvFooter.style, { display: 'flex', gap: '6px', paddingTop: '10px', paddingBottom: '6px', borderTop: '1px solid rgba(139,92,246,0.1)' });
-    const backBtn  = mkBtn('← Back',    { border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b' });
-    const shareBtn = mkBtn('Share 📤',  { border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', boxShadow: '0 3px 12px rgba(99,102,241,0.3)' });
-    backBtn.addEventListener('click', () => showMainView());
-    shareBtn.addEventListener('click', () => shareCanvasAsImage());
-    cvFooter.append(backBtn, shareBtn);
+
+    let _capturedBlob = null;
+
+    const backBtn    = mkBtn('← Back',           { border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b', flex: '0 0 auto', padding: '7px 12px' });
+    const saveImgBtn = mkBtn('📸 Save as Image',  { border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', boxShadow: '0 3px 12px rgba(99,102,241,0.3)' });
+    const dlBtn      = mkBtn('💾 Save',           { border: '1.5px solid #6366f1', background: 'transparent', color: '#6366f1' });
+    const shareApiBtn = mkBtn('↗ Share',          { border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', boxShadow: '0 3px 12px rgba(99,102,241,0.3)' });
+    dlBtn.style.display = 'none';
+    shareApiBtn.style.display = 'none';
+
+    function resetToStage1() {
+      _capturedBlob = null;
+      saveImgBtn.textContent = '📸 Save as Image';
+      saveImgBtn.disabled = false;
+      saveImgBtn.style.display = '';
+      dlBtn.style.display = 'none';
+      shareApiBtn.style.display = 'none';
+    }
+
+    backBtn.addEventListener('click', () => { resetToStage1(); showMainView(); });
+
+    saveImgBtn.addEventListener('click', async () => {
+      if (!_canvasItems.length) return;
+      saveImgBtn.textContent = '⏳ Generating…';
+      saveImgBtn.disabled = true;
+      try {
+        _capturedBlob = await shareCanvasAsImage();
+        if (!_capturedBlob) { resetToStage1(); return; }
+        saveImgBtn.style.display = 'none';
+        dlBtn.style.display = '';
+        shareApiBtn.style.display = '';
+      } catch { resetToStage1(); }
+    });
+
+    dlBtn.addEventListener('click', () => {
+      if (!_capturedBlob) return;
+      const url = URL.createObjectURL(_capturedBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'tapfill-canvas.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      const orig = dlBtn.textContent;
+      dlBtn.textContent = '✓ Saved!';
+      setTimeout(() => { dlBtn.textContent = orig; }, 2000);
+    });
+
+    shareApiBtn.addEventListener('click', async () => {
+      if (!_capturedBlob) return;
+      const file = new File([_capturedBlob], 'tapfill-canvas.png', { type: 'image/png' });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'My Tapfill Canvas' });
+        } else {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': _capturedBlob })]);
+          const orig = shareApiBtn.textContent;
+          shareApiBtn.textContent = '✓ Copied!';
+          setTimeout(() => { shareApiBtn.textContent = orig; }, 2000);
+        }
+      } catch { dlBtn.click(); }
+    });
+
+    cvFooter.append(backBtn, saveImgBtn, dlBtn, shareApiBtn);
     canvasView.appendChild(cvFooter);
 
     // ── Share as image ─────────────────────────────────────────────────────────
@@ -834,20 +891,7 @@
       ctx.fillText('✦  Made with Tapfill', PAD, fy);
       ctx.font = `9px ${ff}`; ctx.fillStyle = '#94a3b8';
       ctx.fillText('tapfill.io', W - PAD - ctx.measureText('tapfill.io').width, fy);
-      cv.toBlob(async blob => {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          const orig = shareBtn.textContent;
-          shareBtn.textContent = '✓ Copied!';
-          shareBtn.style.background = '#10b981';
-          setTimeout(() => {
-            shareBtn.textContent = orig;
-            shareBtn.style.background = 'linear-gradient(135deg,#6366f1,#818cf8)';
-          }, 1800);
-        } catch (e) {
-          console.warn('[Tapfill] clipboard blocked:', e.message);
-        }
-      }, 'image/png');
+      return new Promise(resolve => cv.toBlob(resolve, 'image/png'));
     }
 
     let _savedDisplays = [];
