@@ -544,7 +544,18 @@
       return b;
     }
 
-    const refreshBtn = mkBtn('↺ Refresh', {
+    // ↻ small icon-only refresh button (fixed width, like mobile)
+    const refreshBtn = document.createElement('button');
+    refreshBtn.type = 'button'; refreshBtn.textContent = '↻';
+    Object.assign(refreshBtn.style, {
+      width: '34px', flexShrink: '0', padding: '7px 0', borderRadius: '10px',
+      border: '1.5px solid #e2e8f0', background: 'transparent',
+      color: '#6366f1', fontSize: '14px', fontWeight: '600',
+      cursor: 'pointer', fontFamily: 'inherit',
+    });
+    refreshBtn.addEventListener('mousedown', e => e.preventDefault());
+
+    const canvasBtn = mkBtn('Canvas', {
       border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b',
     });
     const addToCanvasBtn = mkBtn('+ Canvas', {
@@ -555,7 +566,7 @@
       color: '#fff',
     });
 
-    actionRow.append(refreshBtn, addToCanvasBtn, useBtn);
+    actionRow.append(refreshBtn, canvasBtn, addToCanvasBtn, useBtn);
     resultCard.appendChild(actionRow);
 
     // ── Energy bar ────────────────────────────────────────────────────────────
@@ -940,6 +951,8 @@
     }
 
     refreshBtn.addEventListener('click', (e) => { e.stopPropagation(); if (_currentTone) generateForTone(_currentTone); });
+
+    canvasBtn.addEventListener('click', (e) => { e.stopPropagation(); showCanvasView(); });
 
     addToCanvasBtn.addEventListener('click', (e) => {
       e.stopPropagation();

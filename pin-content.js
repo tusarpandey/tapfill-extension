@@ -451,10 +451,21 @@
       b.addEventListener('mousedown', e => e.preventDefault());
       return b;
     }
-    const refreshBtn    = mkBtn('↺ Refresh',  { border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b' });
-    const addCanvasBtn  = mkBtn('+ Canvas',   { border: '1.5px solid #818cf8', background: 'transparent', color: '#6366f1' });
-    const useBtn        = mkBtn('Use this →', { border: 'none', background: 'linear-gradient(135deg,#6366f1,#818cf8)', color: '#fff' });
-    actionRow.append(refreshBtn, addCanvasBtn, useBtn);
+    // ↻ small icon-only refresh button (fixed width, like mobile)
+    const refreshBtn = document.createElement('button');
+    refreshBtn.type = 'button'; refreshBtn.textContent = '↻';
+    Object.assign(refreshBtn.style, {
+      width: '34px', flexShrink: '0', padding: '7px 0', borderRadius: '10px',
+      border: '1.5px solid #e2e8f0', background: 'transparent',
+      color: '#6366f1', fontSize: '14px', fontWeight: '600',
+      cursor: 'pointer', fontFamily: 'inherit',
+    });
+    refreshBtn.addEventListener('mousedown', e => e.preventDefault());
+
+    const canvasBtn    = mkBtn('Canvas',     { border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b' });
+    const addCanvasBtn = mkBtn('+ Canvas',   { border: '1.5px solid #818cf8', background: 'transparent', color: '#6366f1' });
+    const useBtn       = mkBtn('Use this →', { border: 'none', background: 'linear-gradient(135deg,#6366f1,#818cf8)', color: '#fff' });
+    actionRow.append(refreshBtn, canvasBtn, addCanvasBtn, useBtn);
     resultCard.appendChild(actionRow);
 
     // ── Energy bar (progressive dots, no connecting line) ────────────────────
@@ -902,6 +913,11 @@
     refreshBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (_currentTone) generateForTone(_currentTone);
+    });
+
+    canvasBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showCanvasView();
     });
 
     const visibleTones = (_userPlan === 'creator' ? [...TONES, ...CREATOR_TONES] : TONES)
