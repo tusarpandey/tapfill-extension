@@ -720,7 +720,7 @@
     });
 
     // ── Inline canvas view ────────────────────────────────────────────────────
-    const mainViewEls = [header, chipsRow, langRow, sep, resultCard];
+    const mainViewEls = [header, chipsRow, langRow, writeBtn, sep, resultCard];
 
     const canvasView = document.createElement('div');
     Object.assign(canvasView.style, {
@@ -737,9 +737,10 @@
     Object.assign(cvGlow1.style, { position: 'absolute', top: '-20px', left: '-20px', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(99,102,241,0.2)', pointerEvents: 'none' });
     const cvGlow2 = document.createElement('div');
     Object.assign(cvGlow2.style, { position: 'absolute', bottom: '-15px', right: '-15px', width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(139,92,246,0.15)', pointerEvents: 'none' });
-    const cvLogoIcon = document.createElement('div');
-    Object.assign(cvLogoIcon.style, { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(139,92,246,0.4)', boxShadow: '0 0 10px rgba(139,92,246,0.4)', marginRight: '10px', fontSize: '12px', fontWeight: '800', color: '#fff', flexShrink: '0' });
-    cvLogoIcon.textContent = 'T';
+    const cvLogoIcon = document.createElement('img');
+    cvLogoIcon.src = chrome.runtime.getURL('icons/icon-128.png');
+    cvLogoIcon.draggable = false;
+    Object.assign(cvLogoIcon.style, { width: '32px', height: '32px', borderRadius: '8px', marginRight: '10px', flexShrink: '0', display: 'block' });
     const cvTextWrap = document.createElement('div');
     Object.assign(cvTextWrap.style, { display: 'flex', flexDirection: 'column' });
     const cvWordmark = document.createElement('span');
