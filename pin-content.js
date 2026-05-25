@@ -366,45 +366,132 @@
     });
     menu.appendChild(chipsRow);
 
-    // ── Language row ──────────────────────────────────────────────────────────
-    const langRow = document.createElement('div');
-    Object.assign(langRow.style, { display: 'flex', gap: '6px', marginTop: '8px' });
-    const LANG_OPTIONS = [
-      { key: 'english',  label: 'English' },
-      { key: 'hindi',    label: 'Hindi' },
-      { key: 'hinglish', label: 'Hinglish' },
+    // ── Language section ──────────────────────────────────────────────────────
+    const ALL_LANGS_GROUPED = [
+      { group: 'Indian',      langs: ['English', 'Hindi', 'Hinglish', 'Bengali', 'Telugu', 'Marathi'] },
+      { group: 'Middle East', langs: ['Arabic', 'Urdu', 'Turkish'] },
+      { group: 'East Asian',  langs: ['Japanese', 'Korean', 'Mandarin'] },
+      { group: 'SE Asian',    langs: ['Bahasa Indonesia', 'Filipino', 'Vietnamese', 'Thai'] },
+      { group: 'European',    langs: ['German', 'French', 'Spanish', 'Italian', 'Portuguese', 'Russian'] },
     ];
+
+    const langSection = document.createElement('div');
+    Object.assign(langSection.style, { marginTop: '8px' });
+
+    const langHdrRow = document.createElement('div');
+    Object.assign(langHdrRow.style, { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' });
+    const langLbl = document.createElement('span');
+    langLbl.textContent = 'LANGUAGE';
+    Object.assign(langLbl.style, { fontSize: '9px', fontWeight: '700', color: '#94a3b8', letterSpacing: '1.5px', fontFamily: 'inherit' });
+    const changeLangBtn = document.createElement('button');
+    changeLangBtn.type = 'button'; changeLangBtn.textContent = '✎ Change';
+    Object.assign(changeLangBtn.style, { fontSize: '9px', fontWeight: '600', color: '#6366f1', background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '12px', padding: '2px 7px', cursor: 'pointer', fontFamily: 'inherit' });
+    changeLangBtn.addEventListener('mousedown', e => e.preventDefault());
+    langHdrRow.append(langLbl, changeLangBtn);
+    langSection.appendChild(langHdrRow);
+
+    const langRow = document.createElement('div');
+    Object.assign(langRow.style, { display: 'flex', gap: '6px' });
+    langSection.appendChild(langRow);
+
+    const langPicker = document.createElement('div');
+    Object.assign(langPicker.style, { display: 'none', marginTop: '8px', borderTop: '1px solid rgba(99,102,241,0.1)', paddingTop: '8px' });
+    langSection.appendChild(langPicker);
+
     let _activeLangBtn = null;
+    let _chipLabels = ['English', 'Hindi', 'Hinglish'];
+    let _pickerSlot = 0;
+    let _pickerOpen = false;
+
     function setLangActive(btn) {
       if (_activeLangBtn) Object.assign(_activeLangBtn.style, { background: '#f8fafc', borderColor: 'transparent', color: '#64748b', fontWeight: '500' });
       _activeLangBtn = btn;
       Object.assign(btn.style, { background: '#eef2ff', borderColor: '#818cf8', color: '#6366f1', fontWeight: '600' });
     }
-    LANG_OPTIONS.forEach(({ key, label }) => {
-      const lb = document.createElement('button');
-      lb.type = 'button'; lb.textContent = label;
-      Object.assign(lb.style, { flex: '1', padding: '5px 4px', borderRadius: '8px', border: '1.5px solid transparent', background: '#f8fafc', color: '#64748b', fontSize: '11px', fontWeight: '500', fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s' });
-      lb.addEventListener('mousedown', e => e.preventDefault());
-      lb.addEventListener('click', () => {
-        _selectedLanguage = key;
-        setLangActive(lb);
-        chrome.storage.local.set({ tapfill_language: key });
-        if (_langCache[key]) {
-          _currentVariants = _langCache[key];
-          showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
-        } else if (key === 'hinglish' && _langCache['hindi']) {
-          const hl = transliterateVariants(_langCache['hindi']);
-          _langCache['hinglish'] = hl;
-          _currentVariants = hl;
-          showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
-        } else if (_currentTone && _currentComment !== null) {
-          generateAllAndShow(_currentTone);
-        }
+
+    function renderChips() {
+      langRow.innerHTML = ''; _activeLangBtn = null;
+      _chipLabels.forEach((label) => {
+        const key = label.toLowerCase();
+        const lb = document.createElement('button');
+        lb.type = 'button'; lb.textContent = label;
+        Object.assign(lb.style, { flex: '1', padding: '5px 4px', borderRadius: '8px', border: '1.5px solid transparent', background: '#f8fafc', color: '#64748b', fontSize: '11px', fontWeight: '500', fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s' });
+        lb.addEventListener('mousedown', e => e.preventDefault());
+        lb.addEventListener('click', () => {
+          _selectedLanguage = key; setLangActive(lb);
+          chrome.storage.local.set({ tapfill_language: key });
+          if (_langCache[key]) {
+            _currentVariants = _langCache[key];
+            showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
+          } else if (key === 'hinglish' && _langCache['hindi']) {
+            const hl = transliterateVariants(_langCache['hindi']);
+            _langCache['hinglish'] = hl; _currentVariants = hl;
+            showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
+          } else if (_currentTone && _currentComment !== null) {
+            generateAllAndShow(_currentTone);
+          }
+        });
+        langRow.appendChild(lb);
+        chrome.storage.local.get('tapfill_language', (r) => {
+          if (key === (r.tapfill_language || 'english')) setLangActive(lb);
+        });
       });
-      langRow.appendChild(lb);
-      chrome.storage.local.get('tapfill_language', (r) => { if ((r.tapfill_language || 'english') === key) setLangActive(lb); });
+    }
+
+    function renderPicker() {
+      langPicker.innerHTML = '';
+      const slotLbl = document.createElement('div');
+      slotLbl.textContent = 'Select chip to replace:';
+      Object.assign(slotLbl.style, { fontSize: '9px', fontWeight: '700', color: '#94a3b8', letterSpacing: '1px', marginBottom: '6px', fontFamily: 'inherit' });
+      langPicker.appendChild(slotLbl);
+      const slotRow = document.createElement('div');
+      Object.assign(slotRow.style, { display: 'flex', gap: '5px', marginBottom: '8px' });
+      _chipLabels.forEach((label, idx) => {
+        const sb = document.createElement('button'); sb.type = 'button'; sb.textContent = label;
+        Object.assign(sb.style, { flex: '1', padding: '4px 0', borderRadius: '8px', border: 'none', fontSize: '10px', fontWeight: '600', fontFamily: 'inherit', cursor: 'pointer', background: _pickerSlot === idx ? '#6366f1' : 'rgba(99,102,241,0.08)', color: _pickerSlot === idx ? '#fff' : '#5A5A72' });
+        sb.addEventListener('mousedown', e => e.preventDefault());
+        sb.addEventListener('click', () => { _pickerSlot = idx; renderPicker(); });
+        slotRow.appendChild(sb);
+      });
+      langPicker.appendChild(slotRow);
+      ALL_LANGS_GROUPED.forEach(({ group, langs }) => {
+        const grpLbl = document.createElement('div'); grpLbl.textContent = group;
+        Object.assign(grpLbl.style, { fontSize: '8px', fontWeight: '700', color: '#94a3b8', letterSpacing: '1.5px', textTransform: 'uppercase', margin: '6px 0 4px', fontFamily: 'inherit' });
+        langPicker.appendChild(grpLbl);
+        const row = document.createElement('div');
+        Object.assign(row.style, { display: 'flex', flexWrap: 'wrap', gap: '4px' });
+        langs.forEach(lang => {
+          const lb = document.createElement('button'); lb.type = 'button'; lb.textContent = lang;
+          const isCur = _chipLabels[_pickerSlot] === lang;
+          Object.assign(lb.style, { padding: '3px 8px', borderRadius: '12px', fontSize: '10px', fontFamily: 'inherit', cursor: 'pointer', border: '1px solid rgba(99,102,241,0.2)', background: isCur ? '#6366f1' : 'rgba(99,102,241,0.05)', color: isCur ? '#fff' : '#5A5A72' });
+          lb.addEventListener('mousedown', e => e.preventDefault());
+          lb.addEventListener('click', () => {
+            _chipLabels[_pickerSlot] = lang;
+            chrome.storage.local.set({ tapfill_chip_languages: JSON.stringify(_chipLabels) });
+            renderChips();
+            chrome.storage.local.get('tapfill_language', (r) => {
+              langRow.querySelectorAll('button').forEach(b => { if (b.textContent.toLowerCase() === (r.tapfill_language || 'english')) setLangActive(b); });
+            });
+            _pickerOpen = false; langPicker.style.display = 'none'; changeLangBtn.textContent = '✎ Change';
+          });
+          row.appendChild(lb);
+        });
+        langPicker.appendChild(row);
+      });
+    }
+
+    changeLangBtn.addEventListener('click', () => {
+      _pickerOpen = !_pickerOpen;
+      if (_pickerOpen) { renderPicker(); langPicker.style.display = 'block'; changeLangBtn.textContent = '✕ Close'; }
+      else { langPicker.style.display = 'none'; changeLangBtn.textContent = '✎ Change'; }
     });
-    menu.appendChild(langRow);
+
+    chrome.storage.local.get('tapfill_chip_languages', (r) => {
+      if (r.tapfill_chip_languages) { try { _chipLabels = JSON.parse(r.tapfill_chip_languages); } catch {} }
+      renderChips();
+    });
+
+    menu.appendChild(langSection);
 
     // ── Express with AI button (appears after tone chip is selected) ────────────
     const writeBtn = document.createElement('button');
@@ -720,7 +807,7 @@
     });
 
     // ── Inline canvas view ────────────────────────────────────────────────────
-    const mainViewEls = [header, chipsRow, langRow, writeBtn, sep, resultCard];
+    const mainViewEls = [header, chipsRow, langSection, writeBtn, sep, resultCard];
 
     const canvasView = document.createElement('div');
     Object.assign(canvasView.style, {
