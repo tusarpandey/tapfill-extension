@@ -26,12 +26,12 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) =>
   const userData = {
     user_email: message.user_email,
     user_name:  message.user_name,
-    plan:       'free',
+    plan:       message.plan || 'free',   // use plan from message if provided
   };
 
   chrome.storage.local.set({ tapfill_token: tokenData, tapfill_user: userData }, () => {
-    console.log('[Tapfill] auth token saved for', message.user_email);
-    // Fetch real plan from server immediately after saving token
+    console.log('[Tapfill] auth token saved for', message.user_email, '| plan:', userData.plan);
+    // Always fetch real plan from server to override any stale value
     refreshUserPlan(tokenData.access_token);
     // Create an extension_sessions record for this login
     createExtensionSession(tokenData.access_token);
@@ -76,10 +76,10 @@ async function refreshUserPlan(accessToken) {
     const data = await res.json();
     if (!data.plan) return;
     const stored = await chrome.storage.local.get('tapfill_user');
-    if (stored.tapfill_user) {
-      chrome.storage.local.set({ tapfill_user: { ...stored.tapfill_user, plan: data.plan } });
-      console.log('[Tapfill] plan refreshed:', data.plan);
-    }
+    // Always set — even if tapfill_user was never stored (e.g. old login)
+    const existing = stored.tapfill_user || {};
+    chrome.storage.local.set({ tapfill_user: { ...existing, plan: data.plan, email: data.email } });
+    console.log('[Tapfill] plan refreshed:', data.plan);
   } catch (e) {
     console.warn('[Tapfill] plan refresh failed:', e);
   }
@@ -163,8 +163,9 @@ async function handleHeartbeat() {
     // Sync plan if heartbeat returns an updated value
     if (data.plan) {
       const userStored = await chrome.storage.local.get('tapfill_user');
-      if (userStored.tapfill_user && userStored.tapfill_user.plan !== data.plan) {
-        chrome.storage.local.set({ tapfill_user: { ...userStored.tapfill_user, plan: data.plan } });
+      const existingUser = userStored.tapfill_user || {};
+      if (existingUser.plan !== data.plan) {
+        chrome.storage.local.set({ tapfill_user: { ...existingUser, plan: data.plan } });
         console.log('[Tapfill] plan synced via heartbeat:', data.plan);
       }
     }
@@ -301,8 +302,9 @@ async function handleGenerate(msg, port) {
     // Refresh stored plan if server returned an updated value
     if (data.plan) {
       chrome.storage.local.get('tapfill_user', (stored) => {
-        if (stored.tapfill_user && stored.tapfill_user.plan !== data.plan) {
-          chrome.storage.local.set({ tapfill_user: { ...stored.tapfill_user, plan: data.plan } });
+        const existing = stored.tapfill_user || {};
+        if (existing.plan !== data.plan) {
+          chrome.storage.local.set({ tapfill_user: { ...existing, plan: data.plan } });
         }
       });
     }

@@ -27,15 +27,15 @@
   // ─── Tones (identical to Facebook extension) ──────────────────────────────────
 
   const TONES = [
-    { emoji: '🎩', label: 'Classic',   desc: 'Polished and timeless.',            tone: 'professional', temp: 0.2 },
-    { emoji: '🌻', label: 'Warm',      desc: 'Genuine. Heart-first.',             tone: 'friendly',     temp: 0.5 },
-    { emoji: '💎', label: 'Confident', desc: 'Direct. Clear. No second-guessing.', tone: 'supportive',  temp: 0.3 },
-    { emoji: '😄', label: 'Witty',     desc: 'Sharp edge, light touch.',          tone: 'funny',        temp: 0.9 },
+    { emoji: '🎩', label: 'Classic',   desc: 'Polished and timeless.',            tone: 'classic',      temp: 0.2 },
+    { emoji: '🌻', label: 'Friendly',  desc: 'Warm, heartfelt, caring.',          tone: 'friendly',     temp: 0.5 },
+    { emoji: '💎', label: 'Confident', desc: 'Direct. Clear. No second-guessing.', tone: 'confident',   temp: 0.3 },
+    { emoji: '😄', label: 'Funny',     desc: 'Playful and clever. Makes you smile.', tone: 'funny',     temp: 0.9 },
     { emoji: '🎬', label: 'Filmy',     desc: 'Full cinematic. Dramatic flair.',   tone: 'filmy',        temp: 0.8 },
   ];
 
   const CREATOR_TONES = [
-    { emoji: '🔥', label: 'Savage',    desc: 'Zero filter. High impact.',   tone: 'savage',    temp: 0.9, tonePrompt: 'Write a brutally honest, sharp comment with zero filter. Makes a strong point, leaves a mark, but stays within respectful limits. High impact and memorable.' },
+    { emoji: '🔥', label: 'Bold',       desc: 'Sharp. Direct. No filter.',   tone: 'bold_tone', temp: 0.9, tonePrompt: 'Write a sharp, edgy, unapologetic comment. Says what everyone is thinking but nobody says out loud. Strong take delivered with conviction. No softening, no hedging.' },
     { emoji: '🧘', label: 'Wise',      desc: 'Deep insight. Quotable.',     tone: 'wise',      temp: 0.4, tonePrompt: 'Write a thoughtful, philosophical comment like a mentor speaking. Deep insight, quotable, the kind of comment people screenshot and share.' },
     { emoji: '💫', label: 'Hype',      desc: 'High energy. Celebratory.',   tone: 'hype',      temp: 0.9, tonePrompt: 'Write an energetic, enthusiastic comment full of excitement. Like a best friend cheering someone on. High energy, motivating, celebratory.' },
     { emoji: '😏', label: 'Sarcastic', desc: 'Dry. Clever. Smart.',         tone: 'sarcastic', temp: 0.8, tonePrompt: 'Write a dry, clever, subtly sarcastic comment. The kind that makes people laugh and think at the same time. Smart sarcasm, not mean or offensive.' },
@@ -451,10 +451,10 @@
       b.addEventListener('mousedown', e => e.preventDefault());
       return b;
     }
-    const canvasBtn     = mkBtn('Canvas',     { border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b' });
+    const refreshBtn    = mkBtn('↺ Refresh',  { border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b' });
     const addCanvasBtn  = mkBtn('+ Canvas',   { border: '1.5px solid #818cf8', background: 'transparent', color: '#6366f1' });
     const useBtn        = mkBtn('Use this →', { border: 'none', background: 'linear-gradient(135deg,#6366f1,#818cf8)', color: '#fff' });
-    actionRow.append(canvasBtn, addCanvasBtn, useBtn);
+    actionRow.append(refreshBtn, addCanvasBtn, useBtn);
     resultCard.appendChild(actionRow);
 
     // ── Energy bar (progressive dots, no connecting line) ────────────────────
@@ -899,9 +899,9 @@
       clampPosition();
     }
 
-    canvasBtn.addEventListener('click', (e) => {
+    refreshBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      showCanvasView();
+      if (_currentTone) generateForTone(_currentTone);
     });
 
     const visibleTones = (_userPlan === 'creator' ? [...TONES, ...CREATOR_TONES] : TONES)
