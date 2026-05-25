@@ -397,7 +397,7 @@
           _langCache['hinglish'] = hl;
           _currentVariants = hl;
           showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
-        } else if (_currentTone) {
+        } else if (_currentTone && _currentComment !== null) {
           generateAllAndShow(_currentTone);
         }
       });
@@ -405,6 +405,22 @@
       chrome.storage.local.get('tapfill_language', (r) => { if ((r.tapfill_language || 'english') === key) setLangActive(lb); });
     });
     menu.appendChild(langRow);
+
+    // ── Write with AI button (appears after tone chip is selected) ────────────
+    const writeBtn = document.createElement('button');
+    writeBtn.type = 'button';
+    writeBtn.textContent = '✦ Write with AI';
+    Object.assign(writeBtn.style, {
+      display: 'none', marginTop: '10px', width: '100%',
+      padding: '11px 0', borderRadius: '12px',
+      background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+      color: '#fff', border: 'none', fontSize: '13px', fontWeight: '700',
+      cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.01em',
+      boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
+    });
+    writeBtn.addEventListener('mousedown', e => e.preventDefault());
+    writeBtn.addEventListener('click', () => { if (_currentTone) generateAllAndShow(_currentTone); });
+    menu.appendChild(writeBtn);
 
     // ── Gradient separator ───────────────────────────────────────────────────
     const sep = document.createElement('div');
@@ -1030,7 +1046,8 @@
         chip.style.background  = '#eef2ff';
         chip.style.borderColor = '#818cf8';
         labelEl.style.color    = '#6366f1';
-        generateAllAndShow(toneObj);
+        writeBtn.textContent   = `✦ Write with AI · ${toneObj.emoji} ${toneObj.label}`;
+        writeBtn.style.display = '';
       });
     });
 
