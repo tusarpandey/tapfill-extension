@@ -310,90 +310,128 @@
   async function buildCanvasBlob() {
     if (!_canvasItems.length) return null;
 
-    const W = 380, PAD = 18, CARD_GAP = 12, LINE_H = 19, EMO_W = 80;
-    const CARD_PAD = 14, HDR_H = 76, FTR_H = 36, DPR = 2;
+    const W = 400, PAD = 20, CARD_GAP = 12, LINE_H = 20;
+    const CARD_PAD = 16, HDR_H = 90, FTR_H = 54, DPR = 2;
     const ff = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const INNER_W = W - PAD * 2 - CARD_PAD * 2;
+    const BADGE_H = 24, LABEL_H = 18;
 
     const tmp = document.createElement('canvas').getContext('2d');
     tmp.font = `13px ${ff}`;
-    const TEXT_W = W - PAD * 2 - EMO_W - CARD_PAD - 8;
 
-    function wrapHeight(text) {
-      let line = '', rows = 1;
+    function wrapLines(text, maxW) {
+      let line = '', lines = [];
       text.split(/\s+/).forEach(w => {
         const t = line ? line + ' ' + w : w;
-        if (tmp.measureText(t).width > TEXT_W) { rows++; line = w; } else line = t;
+        if (tmp.measureText(t).width > maxW) { lines.push(line); line = w; }
+        else line = t;
       });
-      return CARD_PAD * 2 + 24 + rows * LINE_H;
+      if (line) lines.push(line);
+      return lines;
     }
-    const cardHeights = _canvasItems.map(i => wrapHeight(i.text));
+
+    function cardHeight(item) {
+      const lines = wrapLines(item.text, INNER_W);
+      return CARD_PAD + LABEL_H + 8 + BADGE_H + 12 + Math.max(1, lines.length) * LINE_H + CARD_PAD;
+    }
+
+    const cardHeights = _canvasItems.map(i => cardHeight(i));
     const totalH = HDR_H + PAD
       + cardHeights.reduce((a, h) => a + h + CARD_GAP, 0)
-      + PAD + FTR_H;
+      - CARD_GAP + PAD + FTR_H;
 
     const cv = document.createElement('canvas');
     cv.width = W * DPR; cv.height = totalH * DPR;
     const ctx = cv.getContext('2d');
     ctx.scale(DPR, DPR);
 
-    const bgGrad = ctx.createLinearGradient(0, 0, W, totalH);
-    bgGrad.addColorStop(0, '#eef2ff');
-    bgGrad.addColorStop(1, '#faf5ff');
+    // Dark navy background
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, totalH);
+    bgGrad.addColorStop(0, '#050816');
+    bgGrad.addColorStop(1, '#0B1023');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, totalH);
 
-    // Header
-    const logoImg = new Image();
-    logoImg.src = LOGO_URL;
-    await new Promise(r => { logoImg.onload = r; logoImg.onerror = r; });
-    const logoH = 28, logoW = logoImg.width ? Math.round(logoImg.width * (logoH / logoImg.height)) : 28;
-    ctx.drawImage(logoImg, PAD, (HDR_H - logoH) / 2, logoW, logoH);
-    ctx.font = `700 15px ${ff}`;
-    ctx.fillStyle = '#6366f1';
-    ctx.fillText('tapfill', PAD + logoW + 8, HDR_H / 2 - 4);
-    ctx.font = `400 13px ${ff}`;
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillText('·  My Canvas', PAD + logoW + 8, HDR_H / 2 + 9);
+    // Header: T icon + wordmark
+    const iconImg = new Image();
+    iconImg.src = chrome.runtime.getURL('icons/icon-128.png');
+    await new Promise(r => { iconImg.onload = r; iconImg.onerror = r; });
+
+    const LOGO = 44;
+    const logoX = PAD, logoY = (HDR_H - LOGO) / 2;
+    if (iconImg.width) ctx.drawImage(iconImg, logoX, logoY, LOGO, LOGO);
+
+    ctx.font = `700 18px ${ff}`; ctx.fillStyle = '#ffffff';
+    ctx.fillText('Tapfill', logoX + LOGO + 12, logoY + LOGO / 2 - 2);
+
+    ctx.font = `500 10px ${ff}`; ctx.fillStyle = '#a78bfa';
+    ctx.fillText('MY COMMENT CANVAS', logoX + LOGO + 12, logoY + LOGO / 2 + 13);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, HDR_H); ctx.lineTo(W, HDR_H); ctx.stroke();
 
     // Cards
     let y = HDR_H + PAD;
-    const ENERGY_ACCENT = { subtle: '#a78bfa', balanced: '#818cf8', bold: '#6366f1', powerful: '#4338ca' };
-    _canvasItems.forEach((item, i) => {
-      const h = cardHeights[i];
+    _canvasItems.forEach((item, idx) => {
+      const ch = cardHeights[idx];
+      const cx = PAD, cw = W - PAD * 2;
+
+      ctx.shadowBlur = 18; ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowOffsetY = 5;
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(PAD, y, W - PAD * 2, h, 12);
-      ctx.fill();
-      const accent = ENERGY_ACCENT[item.energyLabel.toLowerCase()] || '#818cf8';
-      ctx.fillStyle = accent;
-      ctx.beginPath();
-      ctx.roundRect(PAD, y, 6, h, [12, 0, 0, 12]);
-      ctx.fill();
-      ctx.font = `20px ${ff}`;
-      ctx.fillText(item.toneEmoji, PAD + 14, y + CARD_PAD + 16);
-      ctx.font = `600 9px ${ff}`;
-      ctx.fillStyle = '#6366f1';
-      ctx.fillText(item.toneLabel, PAD + 14, y + CARD_PAD + 28);
-      ctx.font = `400 9px ${ff}`;
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText(item.energyLabel, PAD + 14, y + CARD_PAD + 38);
-      ctx.font = `400 13px ${ff}`;
-      ctx.fillStyle = '#1e293b';
-      let line = '', lx = PAD + EMO_W, ly = y + CARD_PAD + 13;
-      item.text.split(/\s+/).forEach(w => {
-        const t = line ? line + ' ' + w : w;
-        if (ctx.measureText(t).width > TEXT_W) {
-          ctx.fillText(line, lx, ly); ly += LINE_H; line = w;
-        } else line = t;
+      ctx.beginPath(); ctx.roundRect(cx, y, cw, ch, 14); ctx.fill();
+      ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+      let iy = y + CARD_PAD;
+
+      ctx.font = `600 9px ${ff}`; ctx.fillStyle = '#94a3b8';
+      ctx.fillText(`COMMENT ${String(idx + 1).padStart(2, '0')}`, cx + CARD_PAD, iy + 10);
+      iy += LABEL_H + 8;
+
+      const toneText = `${item.toneEmoji}  ${item.toneLabel}`;
+      ctx.font = `600 11px ${ff}`;
+      const tonePW = ctx.measureText(toneText).width + 20;
+      ctx.fillStyle = 'rgba(139,92,246,0.12)';
+      ctx.beginPath(); ctx.roundRect(cx + CARD_PAD, iy, tonePW, BADGE_H, 12); ctx.fill();
+      ctx.fillStyle = '#7C3AED';
+      ctx.fillText(toneText, cx + CARD_PAD + 10, iy + 16);
+
+      if (item.energyLabel) {
+        ctx.font = `600 11px ${ff}`;
+        const energyPW = ctx.measureText(item.energyLabel).width + 20;
+        const ex = cx + CARD_PAD + tonePW + 8;
+        ctx.fillStyle = 'rgba(16,185,129,0.1)';
+        ctx.beginPath(); ctx.roundRect(ex, iy, energyPW, BADGE_H, 12); ctx.fill();
+        ctx.fillStyle = '#059669';
+        ctx.fillText(item.energyLabel, ex + 10, iy + 16);
+      }
+      iy += BADGE_H + 12;
+
+      ctx.font = `400 13px ${ff}`; ctx.fillStyle = '#0F172A';
+      wrapLines(item.text, INNER_W).forEach(l => {
+        ctx.fillText(l, cx + CARD_PAD, iy + 13);
+        iy += LINE_H;
       });
-      if (line) ctx.fillText(line, lx, ly);
-      y += h + CARD_GAP;
+
+      y += ch + CARD_GAP;
     });
 
     // Footer
-    ctx.font = `500 11px ${ff}`;
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('Generated by Tapfill · tapfill.io', PAD, totalH - FTR_H / 2 + 4);
+    const fy = totalH - FTR_H + 18;
+    const count = _canvasItems.length;
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    ctx.font = `700 11px ${ff}`; ctx.fillStyle = '#6366f1';
+    ctx.fillText('Tapfill', PAD, fy);
+    ctx.font = `400 11px ${ff}`; ctx.fillStyle = '#64748b';
+    ctx.fillText(' · tapfill.io', PAD + ctx.measureText('Tapfill').width, fy);
+
+    const rightTxt = `${count} comment${count !== 1 ? 's' : ''}  ·  ${dateStr}`;
+    ctx.font = `400 10px ${ff}`; ctx.fillStyle = '#94a3b8';
+    ctx.fillText(rightTxt, W - PAD - ctx.measureText(rightTxt).width, fy);
+
+    const tagline = 'TAPFILL.IO — AI POWERED SOCIAL MEDIA COMMENTS';
+    ctx.font = `500 9px ${ff}`; ctx.fillStyle = 'rgba(167,139,250,0.5)';
+    ctx.fillText(tagline, (W - ctx.measureText(tagline).width) / 2, fy + 20);
 
     return new Promise(resolve => cv.toBlob(resolve, 'image/png'));
   }

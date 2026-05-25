@@ -574,129 +574,140 @@
 
   let _canvasItems = []; // { id, text, toneEmoji, toneLabel, energyLabel }
 
-  // Draws all saved comments onto a <canvas> element and copies as PNG to clipboard.
+  // Draws all saved comments onto a <canvas> element and returns a PNG Blob.
   async function buildCanvasBlob() {
-    if (!_canvasItems.length) return;
+    if (!_canvasItems.length) return null;
 
-    const W = 380, PAD = 18, CARD_GAP = 12, LINE_H = 19, EMO_W = 80;
-    const CARD_PAD = 14, HDR_H = 76, FTR_H = 36, DPR = 2;
+    const W = 400, PAD = 20, CARD_GAP = 12, LINE_H = 20;
+    const CARD_PAD = 16, HDR_H = 90, FTR_H = 54, DPR = 2;
     const ff = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const ENERGY_ACCENT = { subtle: '#a78bfa', balanced: '#818cf8', bold: '#6366f1', powerful: '#4338ca' };
+    const INNER_W = W - PAD * 2 - CARD_PAD * 2; // text wrap width inside card
+    const BADGE_H = 24, LABEL_H = 18;
 
-    // ── pass 1: measure card heights ────────────────────────────────────────
+    // ── pass 1: measure card heights ─────────────────────────────────────────
     const tmp = document.createElement('canvas').getContext('2d');
     tmp.font = `13px ${ff}`;
-    const TEXT_W = W - PAD * 2 - EMO_W - CARD_PAD - 8; // 8 = left accent bar width
 
-    function wrapHeight(text) {
-      let line = '', rows = 1;
+    function wrapLines(text, maxW) {
+      let line = '', lines = [];
       text.split(/\s+/).forEach(w => {
         const t = line ? line + ' ' + w : w;
-        if (tmp.measureText(t).width > TEXT_W) { rows++; line = w; } else line = t;
+        if (tmp.measureText(t).width > maxW) { lines.push(line); line = w; }
+        else line = t;
       });
-      return CARD_PAD * 2 + 24 + rows * LINE_H;
+      if (line) lines.push(line);
+      return lines;
     }
-    const cardHeights = _canvasItems.map(i => wrapHeight(i.text));
+
+    function cardHeight(item) {
+      const lines = wrapLines(item.text, INNER_W);
+      return CARD_PAD + LABEL_H + 8 + BADGE_H + 12 + Math.max(1, lines.length) * LINE_H + CARD_PAD;
+    }
+
+    const cardHeights = _canvasItems.map(i => cardHeight(i));
     const totalH = HDR_H + PAD
       + cardHeights.reduce((a, h) => a + h + CARD_GAP, 0)
-      + PAD + FTR_H;
+      - CARD_GAP + PAD + FTR_H;
 
-    // ── pass 2: draw ────────────────────────────────────────────────────────
-    const cv  = document.createElement('canvas');
-    cv.width  = W * DPR; cv.height = totalH * DPR;
+    // ── pass 2: create canvas ─────────────────────────────────────────────────
+    const cv = document.createElement('canvas');
+    cv.width = W * DPR; cv.height = totalH * DPR;
     const ctx = cv.getContext('2d');
     ctx.scale(DPR, DPR);
 
-    // ── Background gradient ──────────────────────────────────────────────────
-    const bgGrad = ctx.createLinearGradient(0, 0, W, totalH);
-    bgGrad.addColorStop(0, '#eef2ff');
-    bgGrad.addColorStop(1, '#faf5ff');
+    // ── Dark navy background ──────────────────────────────────────────────────
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, totalH);
+    bgGrad.addColorStop(0, '#050816');
+    bgGrad.addColorStop(1, '#0B1023');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, totalH);
 
-    // ── Header panel ─────────────────────────────────────────────────────────
-    ctx.shadowBlur = 10; ctx.shadowColor = 'rgba(99,102,241,0.13)'; ctx.shadowOffsetY = 3;
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.roundRect(0, 0, W, HDR_H, [0, 0, 16, 16]); ctx.fill();
-    ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    // ── Header: T icon + wordmark ─────────────────────────────────────────────
+    const iconImg = new Image();
+    iconImg.src = chrome.runtime.getURL('icons/icon-128.png');
+    await new Promise(r => { iconImg.onload = r; iconImg.onerror = r; });
 
-    // Rainbow accent bar at top
-    const barGrad = ctx.createLinearGradient(0, 0, W, 0);
-    barGrad.addColorStop(0,   '#6366f1');
-    barGrad.addColorStop(0.5, '#a78bfa');
-    barGrad.addColorStop(1,   '#818cf8');
-    ctx.fillStyle = barGrad;
-    ctx.beginPath(); ctx.roundRect(0, 0, W, 5, [0, 0, 0, 0]); ctx.fill();
+    const LOGO = 44;
+    const logoX = PAD, logoY = (HDR_H - LOGO) / 2;
+    if (iconImg.width) ctx.drawImage(iconImg, logoX, logoY, LOGO, LOGO);
 
-    // Logo icon + wordmark
-    const hdrImg = new Image();
-    hdrImg.src = LOGO_URL;
-    await new Promise(r => { hdrImg.onload = r; hdrImg.onerror = r; });
-    const ICON_H = 28, ICON_W = hdrImg.width ? Math.round(hdrImg.width * (ICON_H / hdrImg.height)) : 28;
-    ctx.drawImage(hdrImg, PAD, (HDR_H - ICON_H) / 2, ICON_W, ICON_H);
+    ctx.font = `700 18px ${ff}`; ctx.fillStyle = '#ffffff';
+    ctx.fillText('Tapfill', logoX + LOGO + 12, logoY + LOGO / 2 - 2);
 
-    ctx.font = `700 15px ${ff}`; ctx.fillStyle = '#6366f1';
-    ctx.fillText('tapfill', PAD + ICON_W + 8, HDR_H / 2 - 4);
+    ctx.font = `500 10px ${ff}`; ctx.fillStyle = '#a78bfa';
+    ctx.fillText('MY COMMENT CANVAS', logoX + LOGO + 12, logoY + LOGO / 2 + 13);
 
-    ctx.font = `400 13px ${ff}`; ctx.fillStyle = '#cbd5e1';
-    ctx.fillText('·  My Canvas', PAD + ICON_W + 8, HDR_H / 2 + 9);
-
-    // Divider
-    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+    // Thin divider below header
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, HDR_H); ctx.lineTo(W, HDR_H); ctx.stroke();
 
-    // ── Cards ────────────────────────────────────────────────────────────────
+    // ── Cards ─────────────────────────────────────────────────────────────────
     let y = HDR_H + PAD;
-    _canvasItems.forEach((item, i) => {
-      const ch = cardHeights[i];
+    _canvasItems.forEach((item, idx) => {
+      const ch = cardHeights[idx];
       const cx = PAD, cw = W - PAD * 2;
-      const accent = ENERGY_ACCENT[(item.energyLabel || '').toLowerCase()] || '#818cf8';
 
-      // Card drop shadow
-      ctx.shadowBlur = 12; ctx.shadowColor = 'rgba(99,102,241,0.10)'; ctx.shadowOffsetY = 4;
+      // Card shadow + white bg
+      ctx.shadowBlur = 18; ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowOffsetY = 5;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath(); ctx.roundRect(cx, y, cw, ch, 14); ctx.fill();
       ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
 
-      // Left accent bar
-      ctx.fillStyle = accent;
-      ctx.beginPath(); ctx.roundRect(cx, y, 5, ch, [14, 0, 0, 14]); ctx.fill();
+      let iy = y + CARD_PAD;
 
-      // Emoji
-      ctx.font = `20px Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, serif`;
-      ctx.fillStyle = '#000';
-      ctx.fillText(item.toneEmoji, cx + 16, y + CARD_PAD + 18);
+      // "COMMENT 01" label
+      ctx.font = `600 9px ${ff}`; ctx.fillStyle = '#94a3b8';
+      ctx.fillText(`COMMENT ${String(idx + 1).padStart(2, '0')}`, cx + CARD_PAD, iy + 10);
+      iy += LABEL_H + 8;
 
-      // Tone label
-      ctx.font = `bold 9px ${ff}`; ctx.fillStyle = accent;
-      ctx.fillText(item.toneLabel.toUpperCase(), cx + 16, y + CARD_PAD + 34);
+      // Tone pill (lavender)
+      const toneText = `${item.toneEmoji}  ${item.toneLabel}`;
+      ctx.font = `600 11px ${ff}`;
+      const tonePW = ctx.measureText(toneText).width + 20;
+      ctx.fillStyle = 'rgba(139,92,246,0.12)';
+      ctx.beginPath(); ctx.roundRect(cx + CARD_PAD, iy, tonePW, BADGE_H, 12); ctx.fill();
+      ctx.fillStyle = '#7C3AED';
+      ctx.fillText(toneText, cx + CARD_PAD + 10, iy + 16);
 
-      // Energy label
-      ctx.font = `8px ${ff}`; ctx.fillStyle = '#94a3b8';
-      ctx.fillText(item.energyLabel, cx + 16, y + CARD_PAD + 46);
+      // Energy pill (mint)
+      if (item.energyLabel) {
+        ctx.font = `600 11px ${ff}`;
+        const energyPW = ctx.measureText(item.energyLabel).width + 20;
+        const ex = cx + CARD_PAD + tonePW + 8;
+        ctx.fillStyle = 'rgba(16,185,129,0.1)';
+        ctx.beginPath(); ctx.roundRect(ex, iy, energyPW, BADGE_H, 12); ctx.fill();
+        ctx.fillStyle = '#059669';
+        ctx.fillText(item.energyLabel, ex + 10, iy + 16);
+      }
+      iy += BADGE_H + 12;
 
-      // Comment text — word-wrapped
-      ctx.font = `13px ${ff}`; ctx.fillStyle = '#1e293b';
-      const tx = cx + EMO_W + 8;
-      let line = '', ty = y + CARD_PAD + LINE_H;
-      item.text.split(/\s+/).forEach(w => {
-        const t = line ? line + ' ' + w : w;
-        if (ctx.measureText(t).width > TEXT_W) { ctx.fillText(line, tx, ty); line = w; ty += LINE_H; }
-        else line = t;
+      // Comment text (word-wrapped)
+      ctx.font = `400 13px ${ff}`; ctx.fillStyle = '#0F172A';
+      wrapLines(item.text, INNER_W).forEach(l => {
+        ctx.fillText(l, cx + CARD_PAD, iy + 13);
+        iy += LINE_H;
       });
-      if (line) ctx.fillText(line, tx, ty);
 
       y += ch + CARD_GAP;
     });
 
-    // ── Footer watermark ─────────────────────────────────────────────────────
-    const fy = totalH - FTR_H + 14;
-    const wmGrad = ctx.createLinearGradient(PAD, 0, PAD + 200, 0);
-    wmGrad.addColorStop(0, '#6366f1'); wmGrad.addColorStop(1, '#a78bfa');
-    ctx.font = `bold 11px ${ff}`; ctx.fillStyle = wmGrad;
-    ctx.fillText('✦  Made with Tapfill', PAD, fy);
-    ctx.font = `9px ${ff}`; ctx.fillStyle = '#94a3b8';
-    ctx.fillText('tapfill.io', W - PAD - ctx.measureText('tapfill.io').width, fy);
+    // ── Footer ────────────────────────────────────────────────────────────────
+    const fy = totalH - FTR_H + 18;
+    const count = _canvasItems.length;
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    ctx.font = `700 11px ${ff}`; ctx.fillStyle = '#6366f1';
+    ctx.fillText('Tapfill', PAD, fy);
+    ctx.font = `400 11px ${ff}`; ctx.fillStyle = '#64748b';
+    ctx.fillText(' · tapfill.io', PAD + ctx.measureText('Tapfill').width, fy);
+
+    const rightTxt = `${count} comment${count !== 1 ? 's' : ''}  ·  ${dateStr}`;
+    ctx.font = `400 10px ${ff}`; ctx.fillStyle = '#94a3b8';
+    ctx.fillText(rightTxt, W - PAD - ctx.measureText(rightTxt).width, fy);
+
+    const tagline = 'TAPFILL.IO — AI POWERED SOCIAL MEDIA COMMENTS';
+    ctx.font = `500 9px ${ff}`; ctx.fillStyle = 'rgba(167,139,250,0.5)';
+    ctx.fillText(tagline, (W - ctx.measureText(tagline).width) / 2, fy + 20);
 
     return new Promise(resolve => cv.toBlob(resolve, 'image/png'));
   }
