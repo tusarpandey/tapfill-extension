@@ -331,40 +331,12 @@
 
   let _canvasItems = []; // { id, text, toneEmoji, toneLabel, energyLabel }
 
-  let _wordmarkFont = null;
-  async function getWordmarkFont() {
-    if (_wordmarkFont !== null) return _wordmarkFont;
-    try {
-      // Step 1: get the current woff2 URL for the latin subset from Google Fonts CSS
-      const cssRes = await fetch('https://fonts.googleapis.com/css2?family=Nunito:wght@800&display=swap');
-      if (!cssRes.ok) throw new Error('css fetch failed');
-      const css = await cssRes.text();
-      const latinSection = css.includes('/* latin */') ? css.split('/* latin */').pop() : css;
-      const urlMatch = latinSection.match(/https:\/\/fonts\.gstatic\.com\/[^\s"')]+\.woff2/);
-      if (!urlMatch) throw new Error('latin url not found');
-      // Step 2: fetch font binary and create a local blob URL
-      // (blob URLs bypass the page's font-src CSP which blocks remote URLs in canvas)
-      const fontRes = await fetch(urlMatch[0]);
-      if (!fontRes.ok) throw new Error('font binary fetch failed');
-      const blobUrl = URL.createObjectURL(await fontRes.blob());
-      // Step 3: register with correct weight so canvas weight-matching works
-      const face = new FontFace('TapfillWM', `url('${blobUrl}') format('woff2')`, { weight: '800' });
-      await face.load();
-      document.fonts.add(face);
-      _wordmarkFont = 'TapfillWM';
-    } catch (e) {
-      _wordmarkFont = '"Futura", "Century Gothic", "Avenir Next", "Avenir", sans-serif';
-    }
-    return _wordmarkFont;
-  }
-
   async function buildCanvasBlob() {
     if (!_canvasItems.length) return null;
 
     const W = 400, PAD = 20, CARD_GAP = 12, LINE_H = 20;
     const CARD_PAD = 16, HDR_H = 90, FTR_H = 54, DPR = 2;
-    const ff  = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const wff = await getWordmarkFont();
+    const ff = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     const INNER_W = W - PAD * 2 - CARD_PAD * 2;
     const BADGE_H = 24, LABEL_H = 18;
 
@@ -413,7 +385,7 @@
     const logoX = PAD, logoY = (HDR_H - LOGO) / 2;
     if (iconImg.width) ctx.drawImage(iconImg, logoX, logoY, LOGO, LOGO);
 
-    ctx.font = `800 18px ${wff}`; ctx.fillStyle = '#ffffff';
+    ctx.font = `700 18px ${ff}`; ctx.fillStyle = '#ffffff';
     ctx.fillText('Tapfill', logoX + LOGO + 12, logoY + LOGO / 2 - 2);
 
     ctx.font = `500 10px ${ff}`; ctx.fillStyle = '#a78bfa';
@@ -472,10 +444,8 @@
     const count = _canvasItems.length;
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-    ctx.font = `700 11px ${ff}`; ctx.fillStyle = '#6366f1';
-    ctx.fillText('Tapfill', PAD, fy);
     ctx.font = `400 11px ${ff}`; ctx.fillStyle = '#64748b';
-    ctx.fillText(' · tapfill.io', PAD + ctx.measureText('Tapfill').width, fy);
+    ctx.fillText('tapfill.io', PAD, fy);
 
     const rightTxt = `${count} comment${count !== 1 ? 's' : ''}  ·  ${dateStr}`;
     ctx.font = `400 10px ${ff}`; ctx.fillStyle = '#94a3b8';
