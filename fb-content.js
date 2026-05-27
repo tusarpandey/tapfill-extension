@@ -568,11 +568,15 @@
       const cssRes = await fetch('https://fonts.googleapis.com/css2?family=Nunito:wght@800&display=swap');
       if (!cssRes.ok) throw new Error('css fetch failed');
       const css = await cssRes.text();
-      const match = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.woff2)\)/);
-      if (!match) throw new Error('url not found');
-      const face = new FontFace('TapfillWM', `url('${match[1]}') format('woff2')`);
+      const latinSection = css.includes('/* latin */')
+        ? css.split('/* latin */').pop()
+        : css;
+      const urlMatch = latinSection.match(/https:\/\/fonts\.gstatic\.com\/[^\s"')]+\.woff2/);
+      if (!urlMatch) throw new Error('latin url not found');
+      const face = new FontFace('TapfillWM', `url('${urlMatch[0]}') format('woff2')`);
       await face.load();
       document.fonts.add(face);
+      await document.fonts.load('800 18px TapfillWM');
       _wordmarkFont = 'TapfillWM';
     } catch (e) {
       _wordmarkFont = '"Futura", "Century Gothic", "Avenir Next", "Avenir", sans-serif';
