@@ -1,0 +1,72 @@
+{
+  "manifest_version": 3,
+  "name": "Tapfill – Social Comment Assistant",
+  "version": "4.0.0",
+  "description": "Injects an AI comment-assistant button into Facebook, Pinterest, Instagram and LinkedIn.",
+  "icons": {
+    "16":  "icons/icon-16.png",
+    "32":  "icons/icon-32.png",
+    "48":  "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16":  "icons/icon-16.png",
+      "32":  "icons/icon-32.png",
+      "48":  "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "Tapfill",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://*.pinterest.com/*",
+    "https://www.instagram.com/*",
+    "https://www.linkedin.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://tapfill-saas.vercel.app/*",
+    "https://fonts.googleapis.com/*",
+    "https://fonts.gstatic.com/*"
+  ],
+  "externally_connectable": {
+    "matches": ["https://tapfill-saas.vercel.app/*"]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://*.pinterest.com/*",
+        "https://www.instagram.com/*",
+        "https://www.linkedin.com/*"
+      ]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.facebook.com/*"],
+      "js": ["fb-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.pinterest.com/*"],
+      "js": ["pin-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["ig-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["li-content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

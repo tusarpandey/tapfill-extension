@@ -662,6 +662,24 @@
 
     // ── State ─────────────────────────────────────────────────────────────────
     let _canvasItems      = [];
+    let _wordmarkFont = null;
+    async function getWordmarkFont() {
+      if (_wordmarkFont !== null) return _wordmarkFont;
+      try {
+        const cssRes = await fetch('https://fonts.googleapis.com/css2?family=Nunito:wght@800&display=swap');
+        if (!cssRes.ok) throw new Error('css fetch failed');
+        const css = await cssRes.text();
+        const match = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.woff2)\)/);
+        if (!match) throw new Error('url not found');
+        const face = new FontFace('TapfillWM', `url('${match[1]}') format('woff2')`);
+        await face.load();
+        document.fonts.add(face);
+        _wordmarkFont = 'TapfillWM';
+      } catch (e) {
+        _wordmarkFont = '"Futura", "Century Gothic", "Avenir Next", "Avenir", sans-serif';
+      }
+      return _wordmarkFont;
+    }
     let _selectedChip     = null;
     let _currentTone      = null;
     let _currentComment   = null;
@@ -956,7 +974,7 @@
       const W = 400, PAD = 20, CARD_GAP = 12, LINE_H = 20;
       const CARD_PAD = 16, HDR_H = 90, FTR_H = 54, DPR = 2;
       const ff  = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      const wff = '"Futura", "Century Gothic", "Avenir Next", "Avenir", "Gill Sans", "Gill Sans MT", Calibri, sans-serif';
+      const wff = await getWordmarkFont();
       const INNER_W = W - PAD * 2 - CARD_PAD * 2;
       const BADGE_H = 24, LABEL_H = 18;
 
@@ -1005,7 +1023,7 @@
       const logoX = PAD, logoY = (HDR_H - LOGO) / 2;
       if (iconImg.width) ctx.drawImage(iconImg, logoX, logoY, LOGO, LOGO);
 
-      ctx.font = `700 18px ${wff}`; ctx.fillStyle = '#ffffff';
+      ctx.font = `800 18px ${wff}`; ctx.fillStyle = '#ffffff';
       ctx.fillText('Tapfill', logoX + LOGO + 12, logoY + LOGO / 2 - 2);
 
       ctx.font = `500 10px ${ff}`; ctx.fillStyle = '#a78bfa';
