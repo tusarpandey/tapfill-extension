@@ -1064,7 +1064,7 @@
       const count = _canvasItems.length;
       const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-      ctx.font = `700 11px ${wff}`; ctx.fillStyle = '#6366f1';
+      ctx.font = `700 11px ${ff}`; ctx.fillStyle = '#6366f1';
       ctx.fillText('Tapfill', PAD, fy);
       ctx.font = `400 11px ${ff}`; ctx.fillStyle = '#64748b';
       ctx.fillText(' · tapfill.io', PAD + ctx.measureText('Tapfill').width, fy);
