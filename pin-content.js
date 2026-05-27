@@ -1133,7 +1133,7 @@
       showCanvasView();
     });
 
-    const visibleTones = (_userPlan === 'creator' ? [...TONES, ...CREATOR_TONES] : TONES)
+    const visibleTones = (['community_pro', 'creator'].includes(_userPlan) ? [...TONES, ...CREATOR_TONES] : TONES)
       .slice()
       .sort((a, b) => {
         const ai = _toneOrder.indexOf(a.tone);
