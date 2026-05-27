@@ -335,20 +335,22 @@
   async function getWordmarkFont() {
     if (_wordmarkFont !== null) return _wordmarkFont;
     try {
+      // Step 1: get the current woff2 URL for the latin subset from Google Fonts CSS
       const cssRes = await fetch('https://fonts.googleapis.com/css2?family=Nunito:wght@800&display=swap');
       if (!cssRes.ok) throw new Error('css fetch failed');
       const css = await cssRes.text();
-      // Google Fonts returns multiple @font-face blocks per subset (vietnamese, latin-ext, latin…).
-      // We must use the latin block — other subset files don't contain A–Z glyphs.
-      const latinSection = css.includes('/* latin */')
-        ? css.split('/* latin */').pop()
-        : css;
+      const latinSection = css.includes('/* latin */') ? css.split('/* latin */').pop() : css;
       const urlMatch = latinSection.match(/https:\/\/fonts\.gstatic\.com\/[^\s"')]+\.woff2/);
       if (!urlMatch) throw new Error('latin url not found');
-      const face = new FontFace('TapfillWM', `url('${urlMatch[0]}') format('woff2')`);
+      // Step 2: fetch font binary and create a local blob URL
+      // (blob URLs bypass the page's font-src CSP which blocks remote URLs in canvas)
+      const fontRes = await fetch(urlMatch[0]);
+      if (!fontRes.ok) throw new Error('font binary fetch failed');
+      const blobUrl = URL.createObjectURL(await fontRes.blob());
+      // Step 3: register with correct weight so canvas weight-matching works
+      const face = new FontFace('TapfillWM', `url('${blobUrl}') format('woff2')`, { weight: '800' });
       await face.load();
       document.fonts.add(face);
-      await document.fonts.load('800 18px TapfillWM');
       _wordmarkFont = 'TapfillWM';
     } catch (e) {
       _wordmarkFont = '"Futura", "Century Gothic", "Avenir Next", "Avenir", sans-serif';
