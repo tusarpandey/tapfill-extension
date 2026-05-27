@@ -54,16 +54,11 @@
   });
   // Helper: always read fresh from storage before building menu
   async function getUserPlan() {
-    // Read all possible storage keys at once
     const stored = await new Promise(resolve =>
       chrome.storage.local.get(['tapfill_user', 'tapfill_token'], resolve)
     );
-    const cachedPlan = stored.tapfill_user?.plan;
-    const token      = stored.tapfill_token?.access_token;
+    const token = stored.tapfill_token?.access_token;
 
-    console.log('[Tapfill] getUserPlan cached:', cachedPlan, '| token:', token ? 'yes' : 'no');
-
-    // If we have a token, always fetch fresh plan from API
     if (token) {
       try {
         const res = await fetch('https://tapfill-saas.vercel.app/api/ext/profile', {
@@ -71,25 +66,17 @@
         });
         if (res.ok) {
           const data = await res.json();
-          console.log('[Tapfill] getUserPlan API returned:', data.plan);
           if (data.plan) {
-            // Always persist so future calls use cached value
             const existing = stored.tapfill_user || {};
             chrome.storage.local.set({ tapfill_user: { ...existing, plan: data.plan, email: data.email } });
             return data.plan;
           }
         }
-      } catch (e) {
-        console.warn('[Tapfill] getUserPlan API fetch failed:', e);
-      }
+      } catch (e) { /* ignore */ }
     }
 
-    // No token — extension not connected, show connect prompt
-    if (!token) {
-      console.warn('[Tapfill] Not connected — no token in storage. Please connect via popup.');
-    }
-
-    return cachedPlan || 'free';
+    // API did not confirm plan — always default to free (never trust stale cache for plan gating)
+    return 'free';
   }
 
   let _selectedLanguage = 'english';

@@ -55,8 +55,7 @@
     const stored = await new Promise(resolve =>
       chrome.storage.local.get(['tapfill_user', 'tapfill_token'], resolve)
     );
-    const cachedPlan = stored.tapfill_user?.plan;
-    const token      = stored.tapfill_token?.access_token;
+    const token = stored.tapfill_token?.access_token;
     if (token) {
       try {
         const res = await fetch('https://tapfill-saas.vercel.app/api/ext/profile', {
@@ -72,7 +71,8 @@
         }
       } catch (e) { /* ignore */ }
     }
-    return cachedPlan || 'free';
+    // API did not confirm plan — always default to free (never trust stale cache for plan gating)
+    return 'free';
   }
 
   let _selectedLanguage = 'english';
