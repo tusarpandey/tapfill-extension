@@ -350,29 +350,6 @@
   let _menuActiveTextbox = null;
   let _menuPinText       = '';
 
-  let _poppinsBlob = null;
-  async function getPoppinsFont() {
-    if (_poppinsBlob) return 'TapfillPoppins';
-    try {
-      const cssRes = await fetch(
-        'https://fonts.googleapis.com/css2?family=Poppins:wght@700&display=swap',
-        { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }
-      );
-      const css = await cssRes.text();
-      const latinBlock = css.split('/* latin */').pop();
-      const urlMatch = latinBlock.match(/url\(([^)]+)\)/);
-      if (!urlMatch) return null;
-      const fontRes = await fetch(urlMatch[1]);
-      const blob = await fontRes.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const face = new FontFace('TapfillPoppins', `url(${blobUrl})`, { weight: '700' });
-      await face.load();
-      document.fonts.add(face);
-      _poppinsBlob = blobUrl;
-      return 'TapfillPoppins';
-    } catch { return null; }
-  }
-
   // ─── Build #pin-tap-menu ─────────────────────────────────────────────────────
 
   function buildTapMenu() {
@@ -1027,8 +1004,7 @@
       const logoX = PAD, logoY = (HDR_H - LOGO) / 2;
       if (iconImg.width) ctx.drawImage(iconImg, logoX, logoY, LOGO, LOGO);
 
-      const pf = await getPoppinsFont();
-      ctx.font = `700 18px ${pf || ff}`; ctx.fillStyle = '#ffffff';
+      ctx.font = `700 18px ${ff}`; ctx.fillStyle = '#ffffff';
       ctx.fillText('Tapfill', logoX + LOGO + 12, logoY + LOGO / 2 - 2);
 
       ctx.font = `500 10px ${ff}`; ctx.fillStyle = '#a78bfa';
