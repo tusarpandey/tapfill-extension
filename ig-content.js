@@ -336,7 +336,8 @@
 
     const W = 400, PAD = 20, CARD_GAP = 12, LINE_H = 20;
     const CARD_PAD = 16, HDR_H = 90, FTR_H = 54, DPR = 2;
-    const ff = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const ff  = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const wff = '"Futura", "Century Gothic", "Avenir Next", "Avenir", "Gill Sans", "Gill Sans MT", Calibri, sans-serif';
     const INNER_W = W - PAD * 2 - CARD_PAD * 2;
     const BADGE_H = 24, LABEL_H = 18;
 
@@ -385,7 +386,7 @@
     const logoX = PAD, logoY = (HDR_H - LOGO) / 2;
     if (iconImg.width) ctx.drawImage(iconImg, logoX, logoY, LOGO, LOGO);
 
-    ctx.font = `700 18px ${ff}`; ctx.fillStyle = '#ffffff';
+    ctx.font = `700 18px ${wff}`; ctx.fillStyle = '#ffffff';
     ctx.fillText('Tapfill', logoX + LOGO + 12, logoY + LOGO / 2 - 2);
 
     ctx.font = `500 10px ${ff}`; ctx.fillStyle = '#a78bfa';
@@ -444,7 +445,7 @@
     const count = _canvasItems.length;
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-    ctx.font = `700 11px ${ff}`; ctx.fillStyle = '#6366f1';
+    ctx.font = `700 11px ${wff}`; ctx.fillStyle = '#6366f1';
     ctx.fillText('Tapfill', PAD, fy);
     ctx.font = `400 11px ${ff}`; ctx.fillStyle = '#64748b';
     ctx.fillText(' · tapfill.io', PAD + ctx.measureText('Tapfill').width, fy);
