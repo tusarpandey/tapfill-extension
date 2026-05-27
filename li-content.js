@@ -51,6 +51,30 @@
     if (area === 'local' && changes.tapfill_user) _userPlan = changes.tapfill_user.newValue?.plan || 'free';
   });
 
+  async function getUserPlan() {
+    const stored = await new Promise(resolve =>
+      chrome.storage.local.get(['tapfill_user', 'tapfill_token'], resolve)
+    );
+    const cachedPlan = stored.tapfill_user?.plan;
+    const token      = stored.tapfill_token?.access_token;
+    if (token) {
+      try {
+        const res = await fetch('https://tapfill-saas.vercel.app/api/ext/profile', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.plan) {
+            const existing = stored.tapfill_user || {};
+            chrome.storage.local.set({ tapfill_user: { ...existing, plan: data.plan } });
+            return data.plan;
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+    return cachedPlan || 'free';
+  }
+
   let _selectedLanguage = 'english';
   chrome.storage.local.get('tapfill_language', (r) => { _selectedLanguage = r.tapfill_language || 'english'; });
   let _toneOrder = [];
@@ -758,8 +782,10 @@
 
   // ─── Open / close menu ───────────────────────────────────────────────────────
 
-  function openTapMenu(tapRootBtn) {
+  async function openTapMenu(tapRootBtn) {
     closeTapMenu();
+
+    _userPlan = await getUserPlan();
 
     _menuActiveTextbox = document.querySelector(TEXTBOX_SEL);
     _menuPostText      = _menuActiveTextbox ? scrapePostText(_menuActiveTextbox) : '';
