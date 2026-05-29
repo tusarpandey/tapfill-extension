@@ -198,17 +198,22 @@ async function getFreshToken() {
       // Only proactively refresh when expires_at is known and within 60s.
       // If expires_at is missing (optional in Supabase Session type), skip
       // proactive refresh and let the 401-retry path in handleGenerate handle it.
-      const expiresAt  = tokenData.expires_at || 0;
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const isExpired  = expiresAt > 0 && expiresAt - nowSeconds < 60;
+      const expiresAt       = tokenData.expires_at || 0;
+      const nowSeconds      = Math.floor(Date.now() / 1000);
+      const isAlreadyExpired = expiresAt > 0 && expiresAt < nowSeconds;
+      const isExpiringSoon   = expiresAt > 0 && expiresAt - nowSeconds < 60;
 
-      if (!isExpired) { resolve(tokenData); return; }
+      if (!isExpiringSoon) { resolve(tokenData); return; }
 
       // Token is expiring — refresh it
       if (!tokenData.refresh_token) {
-        endExtensionSession(tokenData.access_token);
-        chrome.storage.local.remove(['tapfill_token', 'tapfill_user']);
-        resolve(null);
+        if (isAlreadyExpired) {
+          endExtensionSession(tokenData.access_token);
+          chrome.storage.local.remove(['tapfill_token', 'tapfill_user']);
+          resolve(null);
+        } else {
+          resolve(tokenData); // still valid, let 401-retry handle it
+        }
         return;
       }
 
@@ -221,9 +226,18 @@ async function getFreshToken() {
 
         if (!res.ok) {
           console.warn('[Tapfill] token refresh failed:', res.status);
-          endExtensionSession(tokenData.access_token);
-          chrome.storage.local.remove(['tapfill_token', 'tapfill_user']);
-          resolve(null);
+          if (isAlreadyExpired) {
+            // Actually expired and can't refresh — clear and force reconnect
+            endExtensionSession(tokenData.access_token);
+            chrome.storage.local.remove(['tapfill_token', 'tapfill_user']);
+            resolve(null);
+          } else {
+            // Token still valid (just near expiry) — use it as-is; the
+            // web app may have rotated refresh tokens, but the access_token
+            // is still good. The 401-retry in handleGenerate will take over
+            // if the server actually rejects it.
+            resolve(tokenData);
+          }
           return;
         }
 
