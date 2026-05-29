@@ -709,6 +709,8 @@
 
     function showError(notConnected, isLimit) {
       _currentComment = null;
+      sep.style.display = '';
+      resultCard.style.display = 'flex';
       spinnerWrap.innerHTML = '';
       if (isLimit) {
         const limitDiv = document.createElement('div');

@@ -1123,6 +1123,8 @@
 
     function showError(notConnected, isLimit) {
       _currentComment = null;
+      sep.style.display = '';
+      resultCard.style.display = 'flex';
       if (isLimit) {
         spinnerWrap.innerHTML = '';
         const limitDiv = document.createElement('div');

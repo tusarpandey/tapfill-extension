@@ -618,6 +618,8 @@
 
     function showError(notConnected) {
       _currentComment = null;
+      sep.style.display = '';
+      resultCard.style.display = 'flex';
       if (notConnected) {
         spinnerWrap.innerHTML = `
           <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:4px 0">
