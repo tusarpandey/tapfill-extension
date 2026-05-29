@@ -1841,6 +1841,26 @@
 
     if (!toolbar) {
       document.body.appendChild(tapRoot);
+      console.log('[Tapfill-debug] T icon appended');
+      console.log('[Tapfill-debug] isConnected:', tapRoot.isConnected);
+      console.log('[Tapfill-debug] parent:', tapRoot.parentElement?.tagName);
+      console.log('[Tapfill-debug] position:', tapRoot.style.position);
+      console.log('[Tapfill-debug] left:', tapRoot.style.left);
+      console.log('[Tapfill-debug] top:', tapRoot.style.top);
+      console.log('[Tapfill-debug] display:', tapRoot.style.display);
+      const debugObs = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of m.removedNodes) {
+            if (node === tapRoot || node.contains?.(tapRoot)) {
+              console.log('[Tapfill-debug] ❌ T icon REMOVED by:', m.target.tagName, m.target.id, m.target.className?.substring(0, 50));
+              console.trace('[Tapfill-debug] removal stack:');
+              debugObs.disconnect();
+            }
+          }
+        }
+      });
+      debugObs.observe(document.body, { childList: true, subtree: true });
+      console.log('[Tapfill-debug] observer watching...');
       return;
     }
 
@@ -1853,6 +1873,26 @@
     // Insert after sticker button inside toolbar
     stickerBtn.insertAdjacentElement('afterend', tapRoot);
     console.log('[Tapfill] T icon injected inline in toolbar ✓');
+    console.log('[Tapfill-debug] T icon appended');
+    console.log('[Tapfill-debug] isConnected:', tapRoot.isConnected);
+    console.log('[Tapfill-debug] parent:', tapRoot.parentElement?.tagName);
+    console.log('[Tapfill-debug] position:', tapRoot.style.position);
+    console.log('[Tapfill-debug] left:', tapRoot.style.left);
+    console.log('[Tapfill-debug] top:', tapRoot.style.top);
+    console.log('[Tapfill-debug] display:', tapRoot.style.display);
+    const debugObs = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const node of m.removedNodes) {
+          if (node === tapRoot || node.contains?.(tapRoot)) {
+            console.log('[Tapfill-debug] ❌ T icon REMOVED by:', m.target.tagName, m.target.id, m.target.className?.substring(0, 50));
+            console.trace('[Tapfill-debug] removal stack:');
+            debugObs.disconnect();
+          }
+        }
+      }
+    });
+    debugObs.observe(document.body, { childList: true, subtree: true });
+    console.log('[Tapfill-debug] observer watching...');
 
     // Watch if Facebook removes it and re-inject (max 3 times, 5s window)
     let reinjectionCount = 0;
@@ -1881,6 +1921,9 @@
   // ─── Show / hide helpers ──────────────────────────────────────────────────────
 
   function showTapRoot() {
+    console.log('[Tapfill-debug] showTapRoot called');
+    const el = document.getElementById('tap-root');
+    console.log('[Tapfill-debug] showTapRoot el:', !!el, 'isConnected:', el?.isConnected);
     const btn = document.getElementById(TAP_ROOT_ID);
     if (btn) {
       btn.style.display     = 'inline-flex';
@@ -1890,6 +1933,8 @@
   }
 
   function hideTapRoot() {
+    console.log('[Tapfill-debug] hideTapRoot called');
+    console.trace('[Tapfill-debug] hideTapRoot caller:');
     closeTapMenu();
     const btn = document.getElementById(TAP_ROOT_ID);
     if (btn) btn.style.display = 'none';
