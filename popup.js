@@ -1,6 +1,6 @@
 // Tapfill popup — connection status, energy level, language, and usage bar.
 
-const SAAS_URL = 'https://tapfill-saas.vercel.app';
+const SAAS_URL = 'https://tapfill.io';
 
 const PLAN_LIMITS = {
   free: 5, community_plus: 300, community_pro: 600, creator: 1500,

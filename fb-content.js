@@ -61,7 +61,7 @@
 
     if (token) {
       try {
-        const res = await fetch('https://tapfill-saas.vercel.app/api/ext/profile', {
+        const res = await fetch('https://tapfill.io/api/ext/profile', {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (res.ok) {

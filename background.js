@@ -12,7 +12,7 @@
 //
 // No API keys are stored here — all AI calls go through the user's account.
 
-const SAAS_URL = 'https://tapfill-saas.vercel.app';
+const SAAS_URL = 'https://tapfill.io';
 
 // ── 1. Receive auth token from SaaS dashboard ─────────────────────────────────
 chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) => {
