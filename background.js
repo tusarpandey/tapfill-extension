@@ -195,10 +195,12 @@ async function getFreshToken() {
       const tokenData = result.tapfill_token;
       if (!tokenData?.access_token) { resolve(null); return; }
 
-      // Check if token expires within the next 60 seconds
-      const expiresAt  = tokenData.expires_at ?? 0;          // unix seconds
+      // Only proactively refresh when expires_at is known and within 60s.
+      // If expires_at is missing (optional in Supabase Session type), skip
+      // proactive refresh and let the 401-retry path in handleGenerate handle it.
+      const expiresAt  = tokenData.expires_at || 0;
       const nowSeconds = Math.floor(Date.now() / 1000);
-      const isExpired  = expiresAt - nowSeconds < 60;
+      const isExpired  = expiresAt > 0 && expiresAt - nowSeconds < 60;
 
       if (!isExpired) { resolve(tokenData); return; }
 
@@ -242,32 +244,78 @@ async function getFreshToken() {
   });
 }
 
+// ── Force-refresh helper — used when the API returns 401 ─────────────────────
+async function forceRefreshToken(oldToken) {
+  if (!oldToken?.refresh_token) return null;
+  try {
+    const res = await fetch(`${SAAS_URL}/api/ext/refresh`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ refresh_token: oldToken.refresh_token }),
+    });
+    if (!res.ok) { console.warn('[Tapfill] force-refresh failed:', res.status); return null; }
+    const fresh = await res.json();
+    const newToken = {
+      access_token:  fresh.access_token,
+      refresh_token: fresh.refresh_token,
+      expires_at:    fresh.expires_at,
+    };
+    chrome.storage.local.set({ tapfill_token: newToken });
+    console.log('[Tapfill] force-refreshed token successfully');
+    return newToken;
+  } catch (err) {
+    console.warn('[Tapfill] force-refresh error:', err.message);
+    return null;
+  }
+}
+
 // ── Generate: call /api/ext/generate with Bearer token ────────────────────────
 async function handleGenerate(msg, port) {
-  const tokenData = await getFreshToken();
+  let tokenData = await getFreshToken();
 
   if (!tokenData?.access_token) {
     port.postMessage({ ok: false, error: 'NOT_CONNECTED', notConnected: true });
     return;
   }
 
+  const reqBody = JSON.stringify({
+    postText:   msg.postText,
+    tone:       msg.tone,
+    platform:   msg.platform || 'web',
+    language:   msg.language || 'english',
+    tonePrompt: msg.tonePrompt || null,
+    imageMode:  msg.imageMode  || 'text-only',
+    imageData:  msg.imageData  || null,
+  });
+
   try {
-    const res = await fetch(`${SAAS_URL}/api/ext/generate`, {
+    let res = await fetch(`${SAAS_URL}/api/ext/generate`, {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${tokenData.access_token}`,
       },
-      body: JSON.stringify({
-        postText:   msg.postText,
-        tone:       msg.tone,
-        platform:   msg.platform || 'web',
-        language:   msg.language || 'english',
-        tonePrompt: msg.tonePrompt || null,
-        imageMode:  msg.imageMode  || 'text-only',
-        imageData:  msg.imageData  || null,
-      }),
+      body: reqBody,
     });
+
+    // On 401: try a force-refresh and retry once before giving up.
+    // This handles expired tokens and Supabase refresh-token rotation
+    // without forcing the user to reconnect on every session boundary.
+    if (res.status === 401) {
+      console.log('[Tapfill] got 401, attempting force-refresh...');
+      const refreshed = await forceRefreshToken(tokenData);
+      if (refreshed) {
+        tokenData = refreshed;
+        res = await fetch(`${SAAS_URL}/api/ext/generate`, {
+          method:  'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${tokenData.access_token}`,
+          },
+          body: reqBody,
+        });
+      }
+    }
 
     // Read as text first — avoids crash if server returns HTML error page
     const text = await res.text();
