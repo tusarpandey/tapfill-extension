@@ -960,14 +960,19 @@
 
     // Action buttons row — [Canvas] [+ Canvas] [Use this →]  all equal width
     const actionRow = document.createElement('div');
-    Object.assign(actionRow.style, { display: 'none', gap: '5px' });
+    Object.assign(actionRow.style, {
+      display: 'none', gap: '8px',
+      alignItems: 'center', padding: '12px 16px',
+      borderTop: '1px solid #f1f5f9',
+    });
 
     function mkBtn(label, styles) {
       const b = document.createElement('button');
       b.type = 'button'; b.textContent = label;
       Object.assign(b.style, {
-        flex: '1', padding: '7px 0', borderRadius: '10px',
-        fontSize: '11px', fontWeight: '600', cursor: 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        flex: '1', height: '48px', borderRadius: '12px',
+        fontSize: '14px', fontWeight: '600', cursor: 'pointer',
         fontFamily: 'inherit', ...styles,
       });
       b.addEventListener('mousedown', e => e.preventDefault());
@@ -978,18 +983,19 @@
     const refreshBtn = document.createElement('button');
     refreshBtn.type = 'button'; refreshBtn.textContent = '↻';
     Object.assign(refreshBtn.style, {
-      width: '34px', flexShrink: '0', padding: '7px 0', borderRadius: '10px',
-      border: '1.5px solid #e2e8f0', background: 'transparent',
-      color: '#6366f1', fontSize: '14px', fontWeight: '600',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: '48px', height: '48px', flexShrink: '0', borderRadius: '12px',
+      border: '1px solid #e2e8f0', background: 'white',
+      color: '#6366f1', fontSize: '16px', fontWeight: '600',
       cursor: 'pointer', fontFamily: 'inherit',
     });
     refreshBtn.addEventListener('mousedown', e => e.preventDefault());
 
     const canvasBtn = mkBtn('Canvas', {
-      border: '1.5px solid #e2e8f0', background: 'transparent', color: '#64748b',
+      border: '1px solid #e2e8f0', background: 'white', color: '#374151',
     });
     const addToCanvasBtn = mkBtn('+ Canvas', {
-      border: '1.5px solid #818cf8', background: 'transparent', color: '#6366f1',
+      border: '2px solid #6366f1', background: 'white', color: '#6366f1',
     });
     const useBtn = mkBtn('Use this →', {
       border: 'none', background: 'linear-gradient(135deg,#6366f1,#818cf8)',
