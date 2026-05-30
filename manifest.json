@@ -28,6 +28,7 @@
     "https://*.pinterest.com/*",
     "https://www.instagram.com/*",
     "https://www.linkedin.com/*",
+    "https://*.youtube.com/*",
     "https://generativelanguage.googleapis.com/*",
     "https://tapfill-saas.vercel.app/*",
     "https://tapfill.io/*",
@@ -72,6 +73,11 @@
     {
       "matches": ["https://www.linkedin.com/*"],
       "js": ["li-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["yt-content.js"],
       "run_at": "document_idle"
     }
   ]

@@ -52,6 +52,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     chrome.tabs.create({ url: msg.url });
     sendResponse({ ok: true });
   }
+  if (msg?.type === 'OPEN_PANEL') {
+    chrome.storage.local.set({
+      tapfill_context: {
+        platform: msg.platform,
+        url:      msg.url,
+        postText: msg.postText,
+      }
+    });
+    chrome.action.openPopup();
+    sendResponse({ ok: true });
+  }
   if (msg?.type === 'HEARTBEAT') {
     handleHeartbeat();
     sendResponse({ ok: true });
