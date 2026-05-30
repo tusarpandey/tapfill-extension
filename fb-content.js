@@ -485,7 +485,11 @@
     console.log('  wordCount :', wordCount);
     let imageMode = 'text-only';
     let imageData  = null;
-    if (wordCount > 20) {
+    if (_menuImageModeOverride) {
+      // Platform override (e.g. YouTube) — skip image extraction entirely
+      imageMode = _menuImageModeOverride;
+      console.log(`[Tapfill] imageMode override: ${imageMode}`);
+    } else if (wordCount > 20) {
       imageMode = 'text-only';
       console.log(`[Tapfill] text-only mode — caption has ${wordCount} words`);
     } else if (wordCount >= 1) {
@@ -723,9 +727,10 @@
   //  All 4 tones are generated in parallel as soon as the menu opens.
   //  Clicking a ready row injects the text into the comment box.
 
-  let _menuActiveDialog = null;
-  let _menuArticle      = null;   // nearest [role="article"] for the active post
-  let _menuPostText     = '';
+  let _menuActiveDialog       = null;
+  let _menuArticle            = null;   // nearest [role="article"] for the active post
+  let _menuPostText           = '';
+  let _menuImageModeOverride  = null;   // set by yt-content.js to bypass image logic
 
   function buildTapMenu() {
     injectStyles();
@@ -1669,7 +1674,8 @@
       null
     );
     console.log('[Tapfill] _menuArticle:', _menuArticle?.tagName, _menuArticle?.getAttribute('role'), _menuArticle?.getAttribute('data-pagelet'), '| imgs inside:', _menuArticle?.querySelectorAll('img').length);
-    _menuPostText     = scrapePostText(_menuActiveDialog ?? document.body);
+    _menuPostText          = tapRootBtn._tapPostText ?? scrapePostText(_menuActiveDialog ?? document.body);
+    _menuImageModeOverride = tapRootBtn._tapImageMode ?? null;
     _canvasItems      = []; // fresh canvas for every new post/session
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -1722,9 +1728,10 @@
   function closeTapMenu() {
     document.getElementById(TAP_MENU_ID)?.remove();
     document.removeEventListener('click', onClickAway, true);
-    _menuActiveDialog = null;
-    _menuArticle      = null;
-    _menuPostText     = '';
+    _menuActiveDialog      = null;
+    _menuArticle           = null;
+    _menuPostText          = '';
+    _menuImageModeOverride = null;
   }
 
   function onClickAway(e) {

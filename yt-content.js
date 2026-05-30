@@ -129,6 +129,42 @@
     console.log('[Tapfill-YT] T icon injected ✓');
   }
 
+  // ─── Scrape YouTube video title ───────────────────────────────────────────────
+  function scrapePostText() {
+    const selectors = [
+      'ytd-video-primary-info-renderer h1 yt-formatted-string',
+      '#title h1 yt-formatted-string',
+      '#title yt-formatted-string',
+      'h1.ytd-watch-metadata',
+      '#above-the-fold #title',
+      'ytd-watch-metadata h1',
+      '.ytd-video-primary-info-renderer h1',
+      'h1[class*="title"]',
+    ];
+    for (const sel of selectors) {
+      const el   = document.querySelector(sel);
+      const text = el?.textContent?.trim();
+      if (text && text.length > 3) {
+        console.log('[Tapfill-YT] title found via:', sel, '→', text.substring(0, 50));
+        return text;
+      }
+    }
+    // Fallback: document.title minus " - YouTube" suffix
+    const docTitle = document.title.replace(/\s*[-–]\s*YouTube\s*$/, '').trim();
+    if (docTitle && docTitle.length > 3) {
+      console.log('[Tapfill-YT] using document.title:', docTitle.substring(0, 50));
+      return docTitle;
+    }
+    // Shorts fallback
+    const shortsTitle = document.querySelector(
+      'ytd-reel-video-renderer[is-active] .title, #shorts-title, ytd-shorts h2'
+    );
+    if (shortsTitle?.textContent?.trim()) return shortsTitle.textContent.trim();
+
+    console.log('[Tapfill-YT] no title found');
+    return 'YouTube video';
+  }
+
   // ─── Handle T icon click ──────────────────────────────────────────────────────
   function handleTapClick(btn) {
     getToken((token) => {
@@ -136,6 +172,10 @@
         chrome.runtime.sendMessage({ type: 'OPEN_CONNECT' });
         return;
       }
+      // Attach YouTube context for fb-content.js panel to use
+      btn._tapPostText  = scrapePostText();   // video title for AI context
+      btn._tapImageMode = 'image-only';        // bypass postText validation gate
+      console.log('[Tapfill-YT] postText:', btn._tapPostText.substring(0, 60));
       // Use the shared panel from fb-content.js (loaded first on YouTube)
       if (typeof window._tapfillOpen === 'function') {
         window._tapfillOpen(btn);
