@@ -1684,25 +1684,36 @@
 
     const { menu } = buildTapMenu();
 
-    const textbox = _menuActiveDialog?.querySelector(TEXTBOX_SEL);
-    const anchor  = textbox || tapRootBtn;
-    const aRect   = anchor.getBoundingClientRect();
-    const bRect   = tapRootBtn.getBoundingClientRect();
+    // Get T icon position
+    const tapRect = tapRootBtn.getBoundingClientRect();
 
-    const POPUP_W = 320;
-    const menuH   = menu.offsetHeight || 320;
+    const viewportWidth  = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
-    const GAP = 8;
-    let top  = aRect.top - menuH - GAP;
-    let left = bRect.left;
+    const popupWidth  = 640;
+    const popupHeight = 500;
 
-    if (top < GAP) top = aRect.bottom + GAP;
-    if (top + menuH > window.innerHeight - GAP) top = window.innerHeight - menuH - GAP;
-    if (left + POPUP_W > document.documentElement.clientWidth - GAP) left = document.documentElement.clientWidth - POPUP_W - GAP;
-    if (left < GAP) left = GAP;
+    // Position popup ABOVE the toolbar
+    let popupTop = tapRect.top - popupHeight - 8;
 
-    menu.style.top        = `${top}px`;
-    menu.style.left       = `${left}px`;
+    // If not enough space above — show below
+    if (popupTop < 10) {
+      popupTop = tapRect.bottom + 8;
+    }
+
+    // Position popup LEFT aligned to T icon, clamped to viewport
+    let popupLeft = tapRect.left;
+    if (popupLeft + popupWidth > viewportWidth - 10) {
+      popupLeft = viewportWidth - popupWidth - 10;
+    }
+    if (popupLeft < 10) {
+      popupLeft = 10;
+    }
+
+    menu.style.position   = 'fixed';
+    menu.style.top        = `${popupTop}px`;
+    menu.style.left       = `${popupLeft}px`;
+    menu.style.zIndex     = '2147483647';
     menu.style.visibility = ''; // reveal after positioned
 
     setTimeout(() => document.addEventListener('click', onClickAway, true), 0);
