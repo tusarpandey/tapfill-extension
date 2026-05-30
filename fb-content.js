@@ -2021,9 +2021,7 @@
 
   let tapHideTimer   = null;
   let textboxFocused = false;
-  let lastFocusinTime = 0;
-  const FOCUSIN_COOLDOWN_MS = 2000; // prevent focusin loop
-  let tapIconExists = false; // track if T icon is in DOM
+  let tapIconExists  = false; // track if T icon is in DOM
 
   function positionAndShow() {
     // ── Debug: scan all visible toolbar buttons ──────────────────────────────
@@ -2067,28 +2065,23 @@
       textboxFocused = true;
       clearTimeout(tapHideTimer);
 
-      const now = Date.now();
-      if (now - lastFocusinTime < FOCUSIN_COOLDOWN_MS && tapIconExists) {
-        // Only skip if T icon actually exists
-        // If T icon is gone — always allow re-injection
-        console.log('[Tapfill] focusin cooldown active and icon exists — skipping');
-        return;
-      }
-      lastFocusinTime = now;
+      // Give toolbar time to render — try at 4 increasing delays
+      [300, 600, 1000, 1500].forEach(delay => {
+        setTimeout(() => {
+          if (!textboxFocused) return;
 
-      // Fast path — toolbar usually ready within 100 ms
-      setTimeout(() => {
-        if (!textboxFocused) return;
-        console.log('[Tapfill] focusin attempt 1');
-        positionAndShow();
-      }, 100);
+          // Check if already injected and connected
+          const existing = document.getElementById('tap-root');
+          if (existing && existing.isConnected) {
+            console.log(`[Tapfill] ${delay}ms — already injected, skipping`);
+            return;
+          }
 
-      // Slow path — covers toolbars with longer CSS transitions
-      setTimeout(() => {
-        if (!textboxFocused) return;
-        console.log('[Tapfill] focusin attempt 2');
-        positionAndShow();
-      }, 350);
+          console.log(`[Tapfill] ${delay}ms — attempting injection`);
+          positionAndShow();
+
+        }, delay);
+      });
     }
   }, true);
 
@@ -2113,12 +2106,12 @@
   }, true);
 
   // ─── Immediate scan ───────────────────────────────────────────────────────────
-
-  const immediateFound = document.querySelectorAll(STICKER_SEL);
-  console.log('[Tapfill] immediate scan – sticker buttons found:', immediateFound.length);
-  immediateFound.forEach((stickerBtn) => {
-    injectTapRoot(resolveDialog(stickerBtn));
-  });
+  // Disabled — fires before toolbar renders on Reels, serves no purpose
+  // const immediateFound = document.querySelectorAll(STICKER_SEL);
+  // console.log('[Tapfill] immediate scan – sticker buttons found:', immediateFound.length);
+  // immediateFound.forEach((stickerBtn) => {
+  //   injectTapRoot(resolveDialog(stickerBtn));
+  // });
 
   // ── Heartbeat — keeps extension_sessions.last_active fresh ──────────────────
   function sendHeartbeat() {
