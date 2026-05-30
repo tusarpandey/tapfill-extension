@@ -32,15 +32,30 @@
 
   // ─── Find bottom action row ───────────────────────────────────────────────────
   function findActionRow() {
-    const cancelBtn = document.querySelector(
-      'ytd-commentbox #cancel-button, ytd-commentbox [aria-label="Cancel"]'
-    );
-    if (cancelBtn) return cancelBtn.parentElement;
+    const commentBox = document.querySelector('ytd-commentbox');
+    if (!commentBox) return null;
 
-    const commentBtn = document.querySelector(
-      'ytd-commentbox #submit-button, ytd-commentbox [aria-label="Comment"]'
-    );
-    if (commentBtn) return commentBtn.parentElement;
+    // Primary: footer div is the full-width row with empty left space + buttons right
+    const footer = commentBox.querySelector('#footer, div#footer');
+    if (footer) {
+      const r = footer.getBoundingClientRect();
+      if (r.width > 0 && r.top > 0) return footer;
+    }
+
+    // Fallback: buttons container's parent
+    const buttons = commentBox.querySelector('#buttons');
+    if (buttons) return buttons.parentElement;
+
+    // Fallback: walk up from cancel button to first wide container
+    const cancelBtn = commentBox.querySelector('#cancel-button');
+    if (cancelBtn) {
+      let el = cancelBtn.parentElement;
+      while (el && el !== commentBox) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 300 && r.height > 0 && r.top > 0) return el;
+        el = el.parentElement;
+      }
+    }
 
     return null;
   }
@@ -60,17 +75,17 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       cursor: pointer;
       border-radius: 50%;
       background: transparent;
       border: none;
-      padding: 4px;
-      margin-right: 8px;
+      padding: 0;
+      margin: 0;
       flex-shrink: 0;
       vertical-align: middle;
-      transition: background 0.15s;
+      transition: background 0.2s;
     `;
 
     const img  = document.createElement('img');
@@ -161,12 +176,14 @@
   // ─── Focus detection ──────────────────────────────────────────────────────────
   document.addEventListener('focusin', (e) => {
     const target = e.target;
-    if (!target || target.nodeType !== Node.ELEMENT_NODE) return;
+    if (!target) return;
 
     const isCommentBox = (
       target.id === 'contenteditable-root' ||
-      !!target.closest('ytd-commentbox') ||
-      (target.contentEditable === 'true' && !!target.closest('ytd-commentbox'))
+      !!target.closest('#contenteditable-root') ||
+      (target.tagName === 'YT-FORMATTED-STRING' && !!target.closest('ytd-commentbox')) ||
+      !!target.closest('ytd-commentbox [contenteditable="true"]') ||
+      !!target.closest('ytd-commentbox')?.querySelector('#contenteditable-root')
     );
     if (!isCommentBox) return;
 
