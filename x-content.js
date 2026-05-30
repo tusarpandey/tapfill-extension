@@ -148,18 +148,32 @@
     const r = flagBtn.getBoundingClientRect();
     if (r.width === 0 || r.top === 0) return;
 
-    // Flag button is inside a vertical flex-column wrapper.
-    // Go up one more level to the horizontal toolbar row.
-    const flagColumnWrapper = flagBtn.parentElement;
-    const toolbarRow        = flagColumnWrapper?.parentElement;
-    if (!toolbarRow) return;
+    // Walk UP 4 levels to reach the main horizontal toolbar row:
+    // Level 0: BUTTON (flag)
+    // Level 1: DIV wrapper
+    // Level 2: DIV column (flex-column, 2 children)
+    // Level 3: DIV wrapper
+    // Level 4: DIV flexDirection:row, 8 children ← toolbar row
+    let toolbarRow = flagBtn;
+    for (let i = 0; i < 4; i++) {
+      toolbarRow = toolbarRow?.parentElement;
+    }
+    if (!toolbarRow) {
+      console.log('[Tapfill-X] toolbar row not found');
+      return;
+    }
 
-    console.log('[Tapfill-X] toolbar row:', toolbarRow.tagName,
-      'display:', window.getComputedStyle(toolbarRow).display,
-      'children:', toolbarRow.children.length);
+    console.log('[Tapfill-X] toolbar row children:', toolbarRow.children.length,
+      'display:', window.getComputedStyle(toolbarRow).display);
+
+    // Level 3 is the direct child of the toolbar row that contains the flag
+    let flagWrapper = flagBtn;
+    for (let i = 0; i < 3; i++) {
+      flagWrapper = flagWrapper?.parentElement;
+    }
 
     const tapBtn = buildTapButton();
-    flagColumnWrapper.insertAdjacentElement('afterend', tapBtn);
+    flagWrapper.insertAdjacentElement('afterend', tapBtn);
     lastInjectionTime = now;
     console.log('[Tapfill-X] T icon injected inline ✓');
   }
