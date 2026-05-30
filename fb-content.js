@@ -486,8 +486,9 @@
     let imageMode = 'text-only';
     let imageData  = null;
     if (_menuImageModeOverride) {
-      // Platform override (e.g. YouTube) — skip image extraction entirely
+      // Platform override (e.g. YouTube) — skip FB image extraction, use pre-fetched data
       imageMode = _menuImageModeOverride;
+      imageData = _menuImageDataOverride;
       console.log(`[Tapfill] imageMode override: ${imageMode}`);
     } else if (wordCount > 20) {
       imageMode = 'text-only';
@@ -536,7 +537,7 @@
         if (settled) return; settled = true;
         reject(new Error(chrome.runtime.lastError?.message || 'Port disconnected'));
       });
-      port.postMessage({ type: 'GENERATE', postText, tone: toneObj.tone, platform: 'facebook', language, tonePrompt: toneObj.tonePrompt || null, imageMode, imageData });
+      port.postMessage({ type: 'GENERATE', postText, tone: toneObj.tone, platform: _menuPlatformOverride || 'facebook', language, tonePrompt: toneObj.tonePrompt || null, imageMode, imageData });
     });
   }
 
@@ -731,6 +732,8 @@
   let _menuArticle            = null;   // nearest [role="article"] for the active post
   let _menuPostText           = '';
   let _menuImageModeOverride  = null;   // set by yt-content.js to bypass image logic
+  let _menuImageDataOverride  = null;   // thumbnail base64 from yt-content.js
+  let _menuPlatformOverride   = null;   // platform override (e.g. 'youtube')
 
   function buildTapMenu() {
     injectStyles();
@@ -1676,6 +1679,8 @@
     console.log('[Tapfill] _menuArticle:', _menuArticle?.tagName, _menuArticle?.getAttribute('role'), _menuArticle?.getAttribute('data-pagelet'), '| imgs inside:', _menuArticle?.querySelectorAll('img').length);
     _menuPostText          = tapRootBtn._tapPostText ?? scrapePostText(_menuActiveDialog ?? document.body);
     _menuImageModeOverride = tapRootBtn._tapImageMode ?? null;
+    _menuImageDataOverride = tapRootBtn._tapImageData ?? null;
+    _menuPlatformOverride  = tapRootBtn._tapPlatform  ?? null;
     _canvasItems      = []; // fresh canvas for every new post/session
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -1732,6 +1737,8 @@
     _menuArticle           = null;
     _menuPostText          = '';
     _menuImageModeOverride = null;
+    _menuImageDataOverride = null;
+    _menuPlatformOverride  = null;
   }
 
   function onClickAway(e) {

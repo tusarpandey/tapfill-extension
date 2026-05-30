@@ -29,6 +29,7 @@
     "https://www.instagram.com/*",
     "https://www.linkedin.com/*",
     "https://*.youtube.com/*",
+    "*://img.youtube.com/*",
     "https://generativelanguage.googleapis.com/*",
     "https://tapfill-saas.vercel.app/*",
     "https://tapfill.io/*",

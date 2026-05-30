@@ -165,18 +165,68 @@
     return 'YouTube video';
   }
 
+  // ─── Fetch YouTube video thumbnail as base64 ─────────────────────────────────
+  async function fetchYouTubeThumbnail() {
+    try {
+      let videoId = null;
+      const urlParams = new URLSearchParams(window.location.search);
+      videoId = urlParams.get('v');
+      if (!videoId && window.location.pathname.includes('/shorts/')) {
+        videoId = window.location.pathname.split('/shorts/')[1]?.split('?')[0];
+      }
+      if (!videoId) {
+        console.log('[Tapfill-YT] no video ID found');
+        return null;
+      }
+      console.log('[Tapfill-YT] fetching thumbnail for:', videoId);
+      const thumbnailUrls = [
+        `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+        `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+      ];
+      for (const url of thumbnailUrls) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) continue;
+          const blob = await response.blob();
+          if (blob.size < 5000) continue;
+          const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+          console.log('[Tapfill-YT] thumbnail fetched:', Math.round(blob.size / 1024) + 'KB', url);
+          return base64;
+        } catch (err) {
+          console.log('[Tapfill-YT] thumbnail URL failed:', url);
+          continue;
+        }
+      }
+      console.log('[Tapfill-YT] all thumbnail URLs failed');
+      return null;
+    } catch (err) {
+      console.error('[Tapfill-YT] thumbnail fetch error:', err);
+      return null;
+    }
+  }
+
   // ─── Handle T icon click ──────────────────────────────────────────────────────
   function handleTapClick(btn) {
-    getToken((token) => {
+    getToken(async (token) => {
       if (!token) {
         chrome.runtime.sendMessage({ type: 'OPEN_CONNECT' });
         return;
       }
-      // Attach YouTube context for fb-content.js panel to use
-      btn._tapPostText  = scrapePostText();   // video title for AI context
-      btn._tapImageMode = 'image-only';        // bypass postText validation gate
+      btn._tapPostText  = scrapePostText();
+      btn._tapPlatform  = 'youtube';
       console.log('[Tapfill-YT] postText:', btn._tapPostText.substring(0, 60));
-      // Use the shared panel from fb-content.js (loaded first on YouTube)
+      console.log('[Tapfill-YT] fetching YouTube thumbnail...');
+      const thumbnailData = await fetchYouTubeThumbnail();
+      btn._tapImageData = thumbnailData || null;
+      btn._tapImageMode = thumbnailData ? 'image+text' : 'image-only';
+      console.log('[Tapfill-YT] imageData:', thumbnailData
+        ? 'YES (' + Math.round(thumbnailData.length / 1024) + 'KB)'
+        : 'NO');
       if (typeof window._tapfillOpen === 'function') {
         window._tapfillOpen(btn);
       }
