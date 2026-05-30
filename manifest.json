@@ -50,7 +50,8 @@
         "https://www.facebook.com/*",
         "https://*.pinterest.com/*",
         "https://www.instagram.com/*",
-        "https://www.linkedin.com/*"
+        "https://www.linkedin.com/*",
+        "*://*.youtube.com/*"
       ]
     }
   ],
