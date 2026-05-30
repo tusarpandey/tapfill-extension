@@ -1797,115 +1797,38 @@
     // Removed: was blocking T icon on Facebook Reels
     // if (dialog.querySelector('video')) return;
 
-    const r     = stickerBtn.getBoundingClientRect();
-    const rowEl = stickerBtn.parentElement;
-    const rowR  = rowEl?.getBoundingClientRect();
-    const ref   = (rowR && rowR.height > 0 && rowR.height <= 48) ? rowR : r;
-
-    // Match gap between T icon and sticker to the natural inter-icon spacing.
-    let iconGap = 8;
-    if (rowEl) {
-      const cssGap = parseFloat(getComputedStyle(rowEl).columnGap);
-      if (cssGap > 0 && cssGap < 30) {
-        iconGap = cssGap;
-      } else {
-        const prev = stickerBtn.previousElementSibling;
-        if (prev) {
-          const pR       = prev.getBoundingClientRect();
-          const measured = r.left - pR.right;
-          if (measured >= 0 && measured < 30) iconGap = measured;
-        }
-      }
-    }
-
-    const left = r.right + iconGap + 2;
-    const top  = ref.top + (ref.height - 23) / 2;
+    const stickerRect = stickerBtn.getBoundingClientRect();
 
     const existing = document.getElementById(TAP_ROOT_ID);
     if (existing && existing.isConnected) {
-      // Element exists AND is in the DOM — just reposition
       existing._tapDialog = dialog;
-
-      // Reposition to current sticker button location
-      const rect = stickerBtn.getBoundingClientRect();
-      if (rect.width > 0) {
-        existing.style.left = `${rect.right + 4}px`;
-        existing.style.top  = `${rect.top + (rect.height - 24) / 2}px`;
-      }
+      existing.style.left = `${stickerRect.right + 4}px`;
+      existing.style.top  = `${stickerRect.top + (stickerRect.height - 23) / 2}px`;
       return;
     }
 
     if (existing && !existing.isConnected) {
-      // Element exists in memory but NOT in DOM
-      // Facebook removed it — force re-injection
-      console.log('[Tapfill] T icon detached — re-injecting');
-      existing.remove(); // clean up memory reference
-      // Fall through to create new element
+      existing.remove();
     }
 
     const tapRoot = buildTapRoot(dialog);
 
-    // Find the toolbar container — parent of sticker button
-    const toolbar = stickerBtn.parentElement;
-
-    if (!toolbar) {
-      document.body.appendChild(tapRoot);
-      tapIconExists = true;
-      console.log('[Tapfill] tapIconExists = true');
-      console.log('[Tapfill-debug] T icon appended');
-      console.log('[Tapfill-debug] isConnected:', tapRoot.isConnected);
-      console.log('[Tapfill-debug] parent:', tapRoot.parentElement?.tagName);
-      console.log('[Tapfill-debug] position:', tapRoot.style.position);
-      console.log('[Tapfill-debug] left:', tapRoot.style.left);
-      console.log('[Tapfill-debug] top:', tapRoot.style.top);
-      console.log('[Tapfill-debug] display:', tapRoot.style.display);
-      const debugObs = new MutationObserver((mutations) => {
-        for (const m of mutations) {
-          for (const node of m.removedNodes) {
-            if (node === tapRoot || node.contains?.(tapRoot)) {
-              console.log('[Tapfill-debug] ❌ T icon REMOVED by:', m.target.tagName, m.target.id, m.target.className?.substring(0, 50));
-              console.trace('[Tapfill-debug] removal stack:');
-              debugObs.disconnect();
-            }
-          }
-        }
-      });
-      debugObs.observe(document.body, { childList: true, subtree: true });
-      console.log('[Tapfill-debug] observer watching...');
-      return;
-    }
-
-    // Remove position:fixed — use inline positioning instead
-    tapRoot.style.position = 'relative';
+    // Position T icon just to the right of sticker button
+    tapRoot.style.position = 'fixed';
+    tapRoot.style.left     = `${stickerRect.right + 4}px`;
+    tapRoot.style.top      = `${stickerRect.top + (stickerRect.height - 23) / 2}px`;
+    tapRoot.style.zIndex   = '2147483647';
     tapRoot.style.display  = 'inline-flex';
-    tapRoot.style.left     = '';
-    tapRoot.style.top      = '';
+    tapRoot.style.width    = '23px';
+    tapRoot.style.height   = '23px';
+    tapRoot.style.cursor   = 'pointer';
+    tapRoot.style.margin   = '0';
+    tapRoot.style.padding  = '0';
 
-    // Insert after sticker button inside toolbar
-    stickerBtn.insertAdjacentElement('afterend', tapRoot);
+    // Always append to document.body — outside React tree
+    document.body.appendChild(tapRoot);
+    console.log('[Tapfill] T icon injected at:', stickerRect.right + 4, stickerRect.top);
     tapIconExists = true;
-    console.log('[Tapfill] tapIconExists = true');
-    console.log('[Tapfill] T icon injected inline in toolbar ✓');
-    console.log('[Tapfill-debug] T icon appended');
-    console.log('[Tapfill-debug] isConnected:', tapRoot.isConnected);
-    console.log('[Tapfill-debug] parent:', tapRoot.parentElement?.tagName);
-    console.log('[Tapfill-debug] position:', tapRoot.style.position);
-    console.log('[Tapfill-debug] left:', tapRoot.style.left);
-    console.log('[Tapfill-debug] top:', tapRoot.style.top);
-    console.log('[Tapfill-debug] display:', tapRoot.style.display);
-    const debugObs = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        for (const node of m.removedNodes) {
-          if (node === tapRoot || node.contains?.(tapRoot)) {
-            console.log('[Tapfill-debug] ❌ T icon REMOVED by:', m.target.tagName, m.target.id, m.target.className?.substring(0, 50));
-            console.trace('[Tapfill-debug] removal stack:');
-            debugObs.disconnect();
-          }
-        }
-      }
-    });
-    debugObs.observe(document.body, { childList: true, subtree: true });
-    console.log('[Tapfill-debug] observer watching...');
 
     // Watch if Facebook removes it and re-inject (max 3 times, 5s window)
     let reinjectionCount = 0;
@@ -1914,17 +1837,13 @@
     const tapObserver = new MutationObserver(() => {
       if (!document.getElementById('tap-root') && reinjectionCount < MAX_REINJECTIONS) {
         tapIconExists = false;
-        console.log('[Tapfill] tapIconExists = false — will allow re-injection');
         reinjectionCount++;
-        console.log(`[Tapfill] T icon removed — re-injecting (${reinjectionCount}/${MAX_REINJECTIONS})`);
-
         const newSticker = document.querySelector(STICKER_SEL_OPTIONS.join(','));
         if (newSticker) {
-          const newToolbar = newSticker.parentElement;
-          if (newToolbar) {
-            tapRoot.style.position = 'relative';
-            newSticker.insertAdjacentElement('afterend', tapRoot);
-          }
+          const newRect = newSticker.getBoundingClientRect();
+          tapRoot.style.left = `${newRect.right + 4}px`;
+          tapRoot.style.top  = `${newRect.top + (newRect.height - 23) / 2}px`;
+          document.body.appendChild(tapRoot);
         }
       }
     });
@@ -1958,8 +1877,6 @@
   }
 
   function hideTapRoot() {
-    console.log('[Tapfill-debug] hideTapRoot called');
-    console.trace('[Tapfill-debug] hideTapRoot caller:');
     closeTapMenu();
     const btn = document.getElementById(TAP_ROOT_ID);
     if (btn) btn.style.display = 'none';
