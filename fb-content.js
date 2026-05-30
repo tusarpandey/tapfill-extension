@@ -1783,7 +1783,12 @@
     // card).  Filter to visible ones (non-zero size) and pick the leftmost.
     const allStickers = [...container.querySelectorAll(STICKER_SEL)].filter(btn => {
       const r = btn.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
+      if (r.width === 0 || r.height === 0) return false;
+      if (r.left > window.innerWidth)  return false;
+      if (r.right < 0)                 return false;
+      if (r.top > window.innerHeight)  return false;
+      if (r.bottom < 0)                return false;
+      return true;
     });
     if (!allStickers.length) return;
 
@@ -1838,7 +1843,10 @@
       if (!document.getElementById('tap-root') && reinjectionCount < MAX_REINJECTIONS) {
         tapIconExists = false;
         reinjectionCount++;
-        const newSticker = document.querySelector(STICKER_SEL_OPTIONS.join(','));
+        const newSticker = [...document.querySelectorAll(STICKER_SEL_OPTIONS.join(','))].find(el => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.left <= window.innerWidth && r.right >= 0 && r.top <= window.innerHeight && r.bottom >= 0;
+        });
         if (newSticker) {
           const newRect = newSticker.getBoundingClientRect();
           tapRoot.style.left = `${newRect.right + 4}px`;
