@@ -13,6 +13,15 @@
 (function () {
   'use strict';
 
+  // Check if extension context is still valid
+  try {
+    chrome.runtime.getURL('');
+  } catch (e) {
+    // Extension was reloaded — this content script is orphaned
+    console.log('[Tapfill] extension context invalid — stopping');
+    return;
+  }
+
   // ─── Config ───────────────────────────────────────────────────────────────────
   //
   //  AI model via Mistral — API key is stored securely in background.js only.
@@ -1841,6 +1850,8 @@
 
     if (!toolbar) {
       document.body.appendChild(tapRoot);
+      tapIconExists = true;
+      console.log('[Tapfill] tapIconExists = true');
       console.log('[Tapfill-debug] T icon appended');
       console.log('[Tapfill-debug] isConnected:', tapRoot.isConnected);
       console.log('[Tapfill-debug] parent:', tapRoot.parentElement?.tagName);
@@ -1872,6 +1883,8 @@
 
     // Insert after sticker button inside toolbar
     stickerBtn.insertAdjacentElement('afterend', tapRoot);
+    tapIconExists = true;
+    console.log('[Tapfill] tapIconExists = true');
     console.log('[Tapfill] T icon injected inline in toolbar ✓');
     console.log('[Tapfill-debug] T icon appended');
     console.log('[Tapfill-debug] isConnected:', tapRoot.isConnected);
@@ -1900,6 +1913,8 @@
 
     const tapObserver = new MutationObserver(() => {
       if (!document.getElementById('tap-root') && reinjectionCount < MAX_REINJECTIONS) {
+        tapIconExists = false;
+        console.log('[Tapfill] tapIconExists = false — will allow re-injection');
         reinjectionCount++;
         console.log(`[Tapfill] T icon removed — re-injecting (${reinjectionCount}/${MAX_REINJECTIONS})`);
 
@@ -1921,15 +1936,25 @@
   // ─── Show / hide helpers ──────────────────────────────────────────────────────
 
   function showTapRoot() {
-    console.log('[Tapfill-debug] showTapRoot called');
-    const el = document.getElementById('tap-root');
-    console.log('[Tapfill-debug] showTapRoot el:', !!el, 'isConnected:', el?.isConnected);
-    const btn = document.getElementById(TAP_ROOT_ID);
-    if (btn) {
-      btn.style.display     = 'inline-flex';
-      btn.style.opacity     = '';
-      btn.style.visibility  = '';
+    const el = document.getElementById(TAP_ROOT_ID);
+
+    if (!el || !el.isConnected) {
+      console.log('[Tapfill] showTapRoot — element missing, triggering re-inject');
+      tapIconExists = false; // allow re-injection
+      setTimeout(() => {
+        if (!document.getElementById(TAP_ROOT_ID) && textboxFocused) {
+          console.log('[Tapfill] showTapRoot — re-injecting...');
+          document.querySelectorAll(STICKER_SEL_OPTIONS.join(','))
+            .forEach(s => injectTapRoot(resolveDialog(s)));
+        }
+      }, 100);
+      return;
     }
+
+    // Element exists — show it
+    el.style.display    = 'inline-flex';
+    el.style.visibility = 'visible';
+    el.style.opacity    = '1';
   }
 
   function hideTapRoot() {
@@ -1996,8 +2021,9 @@
 
   let tapHideTimer   = null;
   let textboxFocused = false;
-  let lastInjectionTime = 0;
-  const INJECTION_COOLDOWN_MS = 2000;
+  let lastFocusinTime = 0;
+  const FOCUSIN_COOLDOWN_MS = 2000; // prevent focusin loop
+  let tapIconExists = false; // track if T icon is in DOM
 
   function positionAndShow() {
     document.querySelectorAll(STICKER_SEL).forEach((s) => {
@@ -2017,11 +2043,13 @@
       clearTimeout(tapHideTimer);
 
       const now = Date.now();
-      if (now - lastInjectionTime < INJECTION_COOLDOWN_MS) {
-        console.log('[Tapfill] injection cooldown active — skipping');
+      if (now - lastFocusinTime < FOCUSIN_COOLDOWN_MS && tapIconExists) {
+        // Only skip if T icon actually exists
+        // If T icon is gone — always allow re-injection
+        console.log('[Tapfill] focusin cooldown active and icon exists — skipping');
         return;
       }
-      lastInjectionTime = now;
+      lastFocusinTime = now;
 
       // Fast path — toolbar usually ready within 100 ms
       setTimeout(() => {
