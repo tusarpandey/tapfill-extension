@@ -207,24 +207,30 @@
 
   function insertTextReact(textbox, text) {
     textbox.focus();
-    textbox.innerHTML = text;
 
+    // execCommand goes through the browser's native editing pipeline so
+    // React/Draft.js editors (Facebook, X/Twitter) detect the change and
+    // enable their submit buttons. Plain innerHTML bypasses this.
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+    document.execCommand('insertText', false, text);
+
+    // Fire the full event set React listens to
+    ['input', 'change', 'keydown', 'keyup'].forEach(t =>
+      textbox.dispatchEvent(new Event(t, { bubbles: true, composed: true }))
+    );
+
+    // Click + refocus to flush any pending React synthetic event queue
+    textbox.click();
+    textbox.focus();
+
+    // Move cursor to end
     const sel   = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textbox);
     range.collapse(false);
     sel.removeAllRanges();
     sel.addRange(range);
-
-    textbox.dispatchEvent(
-      new InputEvent('input', {
-        bubbles:    true,
-        cancelable: true,
-        composed:   true,
-        data:       text,
-        inputType:  'insertText',
-      })
-    );
   }
 
   // ─── Locate the closest enclosing comment dialog ──────────────────────────────
