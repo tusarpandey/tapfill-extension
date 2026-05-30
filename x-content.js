@@ -88,31 +88,6 @@
     }
   }
 
-  // ─── Find rightmost toolbar icon before Reply button ─────────────────────────
-  function findToolbar() {
-    const toolbarSelectors = [
-      '[data-testid="contentDisclosureButton"]',
-      '[aria-label="Content disclosure"]',
-      '[data-testid="geoButton"]',
-      '[aria-label="Tag location"]',
-      '[data-testid="scheduleOption"]',
-      '[aria-label="Schedule post"]',
-      '[aria-label="Add emoji"]',
-      '[data-testid="emoji"]',
-    ];
-    for (const sel of toolbarSelectors) {
-      const el = document.querySelector(sel);
-      if (el) {
-        const r = el.getBoundingClientRect();
-        if (r.width > 0 && r.top > 0) {
-          console.log('[Tapfill-X] anchor found:', sel);
-          return el;
-        }
-      }
-    }
-    return null;
-  }
-
   // ─── Build T icon ─────────────────────────────────────────────────────────────
   function buildTapButton() {
     const btn = document.createElement('div');
@@ -129,12 +104,10 @@
       border-radius: 50%;
       background: transparent;
       padding: 0;
-      margin: 0;
+      margin: 0 2px;
       flex-shrink: 0;
-      vertical-align: middle;
+      align-self: center;
       transition: background 0.15s;
-      position: static;
-      z-index: 999999;
     `;
 
     const img  = document.createElement('img');
@@ -155,7 +128,7 @@
     return btn;
   }
 
-  // ─── Inject T icon after emoji button ─────────────────────────────────────────
+  // ─── Inject T icon inline in the toolbar row ──────────────────────────────────
   function injectTapRoot() {
     const now = Date.now();
     if (now - lastInjectionTime < 1000) return;
@@ -164,44 +137,31 @@
     if (existing && existing.isConnected) return;
     if (existing) existing.remove();
 
-    const anchor = findToolbar();
-    if (!anchor) {
-      console.log('[Tapfill-X] anchor button not found');
+    const flagBtn = document.querySelector(
+      '[data-testid="contentDisclosureButton"],' +
+      '[aria-label="Content disclosure"]'
+    );
+    if (!flagBtn) {
+      console.log('[Tapfill-X] flag button not found');
       return;
     }
+    const r = flagBtn.getBoundingClientRect();
+    if (r.width === 0 || r.top === 0) return;
 
-    // Walk up from the anchor button to find the horizontal flex toolbar row.
-    // Skip flex-column wrappers (e.g. the button+label column around the flag icon).
-    let flexRow = anchor.parentElement;
-    while (flexRow && flexRow !== document.body) {
-      const s = window.getComputedStyle(flexRow);
-      const isHorizFlex = (s.display === 'flex' || s.display === 'inline-flex')
-                          && s.flexDirection !== 'column'
-                          && s.flexDirection !== 'column-reverse';
-      if (isHorizFlex && flexRow.children.length >= 3) break;
-      flexRow = flexRow.parentElement;
-    }
-    if (!flexRow || flexRow === document.body) {
-      console.log('[Tapfill-X] flex row not found — falling back to anchor parent');
-      flexRow = anchor.parentElement;
-    }
+    // Flag button is inside a vertical flex-column wrapper.
+    // Go up one more level to the horizontal toolbar row.
+    const flagColumnWrapper = flagBtn.parentElement;
+    const toolbarRow        = flagColumnWrapper?.parentElement;
+    if (!toolbarRow) return;
 
-    // Find the direct child of the flex row that contains our anchor
-    let anchorSlot = anchor;
-    while (anchorSlot.parentElement !== flexRow) {
-      anchorSlot = anchorSlot.parentElement;
-      if (!anchorSlot) break;
-    }
-    if (!anchorSlot) anchorSlot = anchor;
-
-    console.log('[Tapfill-X] flexRow:', flexRow.tagName,
-      'display:', window.getComputedStyle(flexRow).display,
-      'children:', flexRow.children.length);
+    console.log('[Tapfill-X] toolbar row:', toolbarRow.tagName,
+      'display:', window.getComputedStyle(toolbarRow).display,
+      'children:', toolbarRow.children.length);
 
     const tapBtn = buildTapButton();
-    anchorSlot.insertAdjacentElement('afterend', tapBtn);
+    flagColumnWrapper.insertAdjacentElement('afterend', tapBtn);
     lastInjectionTime = now;
-    console.log('[Tapfill-X] T icon injected ✓');
+    console.log('[Tapfill-X] T icon injected inline ✓');
   }
 
   // ─── Handle T icon click ──────────────────────────────────────────────────────
@@ -285,7 +245,8 @@
 
   // ─── Watch for dynamically loaded reply boxes ─────────────────────────────────
   const pageObserver = new MutationObserver(() => {
-    if (textboxFocused && !document.getElementById(TAP_ROOT_ID) && findToolbar()) {
+    if (textboxFocused && !document.getElementById(TAP_ROOT_ID) &&
+        document.querySelector('[data-testid="contentDisclosureButton"],[aria-label="Content disclosure"]')) {
       injectTapRoot();
     }
   });
