@@ -88,12 +88,27 @@
     }
   }
 
-  // ─── Find reply toolbar emoji button ─────────────────────────────────────────
+  // ─── Find rightmost toolbar icon before Reply button ─────────────────────────
   function findToolbar() {
-    const emojiBtn = document.querySelector('[aria-label="Add emoji"], [data-testid="emoji"]');
-    if (emojiBtn) {
-      const r = emojiBtn.getBoundingClientRect();
-      if (r.width > 0 && r.top > 0) return emojiBtn;
+    const toolbarSelectors = [
+      '[data-testid="contentDisclosureButton"]',
+      '[aria-label="Content disclosure"]',
+      '[data-testid="geoButton"]',
+      '[aria-label="Tag location"]',
+      '[data-testid="scheduleOption"]',
+      '[aria-label="Schedule post"]',
+      '[aria-label="Add emoji"]',
+      '[data-testid="emoji"]',
+    ];
+    for (const sel of toolbarSelectors) {
+      const el = document.querySelector(sel);
+      if (el) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.top > 0) {
+          console.log('[Tapfill-X] anchor found:', sel);
+          return el;
+        }
+      }
     }
     return null;
   }
@@ -109,14 +124,16 @@
       justify-content: center;
       width: 34px;
       height: 34px;
+      min-width: 34px;
       cursor: pointer;
       border-radius: 50%;
       background: transparent;
       padding: 0;
-      margin-left: 2px;
+      margin: 0;
       flex-shrink: 0;
+      vertical-align: middle;
       transition: background 0.15s;
-      position: relative;
+      position: static;
       z-index: 999999;
     `;
 
@@ -147,14 +164,18 @@
     if (existing && existing.isConnected) return;
     if (existing) existing.remove();
 
-    const emojiBtn = findToolbar();
-    if (!emojiBtn) {
-      console.log('[Tapfill-X] emoji button not found');
+    const anchor = findToolbar();
+    if (!anchor) {
+      console.log('[Tapfill-X] anchor button not found');
       return;
     }
 
+    const toolbarContainer = anchor.parentElement;
+    console.log('[Tapfill-X] toolbar container:', toolbarContainer?.tagName,
+      'display:', window.getComputedStyle(toolbarContainer)?.display);
+
     const tapBtn = buildTapButton();
-    emojiBtn.insertAdjacentElement('afterend', tapBtn);
+    anchor.insertAdjacentElement('afterend', tapBtn);
     lastInjectionTime = now;
     console.log('[Tapfill-X] T icon injected ✓');
   }
