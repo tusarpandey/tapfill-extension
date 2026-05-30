@@ -1780,51 +1780,30 @@
 
     // Facebook has two elements matching STICKER_SEL: the visible toolbar icon
     // (small x, inside the card) and a hidden React overlay (large x, outside the
-    // card).  Filter to visible ones (non-zero size) and pick the leftmost.
-    const allStickers = [...container.querySelectorAll(STICKER_SEL)].filter(btn => {
-      const r = btn.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      if (r.left > window.innerWidth)  return false;
-      if (r.right < 0)                 return false;
-      if (r.top > window.innerHeight)  return false;
-      if (r.bottom < 0)                return false;
-      return true;
+    // Use sticker-specific selectors only — emoji selectors sit to the LEFT
+    // of the sticker button and would cause the T icon to overlap them.
+    const toolbarButtons = [...document.querySelectorAll(
+      '[aria-label="Comment with a sticker"],[aria-label="Comment with a Sticker"]'
+    )].filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0
+        && r.left < window.innerWidth
+        && r.left > 0;
     });
-    if (!allStickers.length) return;
 
-    const stickerBtn = allStickers.reduce((a, b) =>
-      a.getBoundingClientRect().x <= b.getBoundingClientRect().x ? a : b
-    );
+    if (!toolbarButtons.length) return;
 
-    const dialog = stickerBtn.closest('[role="dialog"]');
+    const anchor     = toolbarButtons[0];
+    const anchorRect = anchor.getBoundingClientRect();
+
+    const dialog = anchor.closest('[role="dialog"]');
     if (!dialog) return;
 
     // Removed: was blocking T icon on Facebook Reels
     // if (dialog.querySelector('video')) return;
 
-    const r     = stickerBtn.getBoundingClientRect();
-    const rowEl = stickerBtn.parentElement;
-    const rowR  = rowEl?.getBoundingClientRect();
-    const ref   = (rowR && rowR.height > 0 && rowR.height <= 48) ? rowR : r;
-
-    // Match gap between T icon and sticker to the natural inter-icon spacing.
-    let iconGap = 8;
-    if (rowEl) {
-      const cssGap = parseFloat(getComputedStyle(rowEl).columnGap);
-      if (cssGap > 0 && cssGap < 30) {
-        iconGap = cssGap;
-      } else {
-        const prev = stickerBtn.previousElementSibling;
-        if (prev) {
-          const pR       = prev.getBoundingClientRect();
-          const measured = r.left - pR.right;
-          if (measured >= 0 && measured < 30) iconGap = measured;
-        }
-      }
-    }
-
-    const left = r.right + iconGap + 2;
-    const top  = ref.top + (ref.height - 23) / 2;
+    const left = anchorRect.right + 4;
+    const top  = anchorRect.top + (anchorRect.height - 23) / 2;
 
     const existing = document.getElementById(TAP_ROOT_ID);
     if (existing) {
@@ -1838,7 +1817,7 @@
     tapRoot.style.position = 'fixed';
     tapRoot.style.left     = `${left}px`;
     tapRoot.style.top      = `${top}px`;
-    tapRoot.style.zIndex   = '999999';
+    tapRoot.style.zIndex   = '2147483647';
 
     document.body.appendChild(tapRoot);
     console.log('[Tapfill] #tap-root injected ✓', { left, top }, tapRoot);
