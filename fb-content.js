@@ -1776,7 +1776,12 @@
   // ─── Inject / reposition #tap-root ────────────────────────────────────────────
 
   function injectTapRoot(container) {
-    if (!container.querySelectorAll) return;
+    console.log('[inject-debug] injectTapRoot called, container:', container?.tagName);
+
+    if (!container.querySelectorAll) {
+      console.log('[inject-debug] returned: no querySelectorAll');
+      return;
+    }
 
     // Facebook has two elements matching STICKER_SEL: the visible toolbar icon
     // (small x, inside the card) and a hidden React overlay (large x, outside the
@@ -1785,17 +1790,28 @@
       const r = btn.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
-    if (!allStickers.length) return;
+    console.log('[inject-debug] sticker buttons found:', allStickers.length);
+    if (!allStickers.length) {
+      console.log('[inject-debug] returned: no stickers');
+      return;
+    }
 
     const stickerBtn = allStickers.reduce((a, b) =>
       a.getBoundingClientRect().x <= b.getBoundingClientRect().x ? a : b
     );
 
     const dialog = stickerBtn.closest('[role="dialog"]');
-    if (!dialog) return;
+    console.log('[inject-debug] dialog:', dialog?.tagName, dialog?.getAttribute('role'));
+    if (!dialog) {
+      console.log('[inject-debug] returned: no dialog');
+      return;
+    }
 
     // Skip video posts — only inject on photo/image dialogs
-    if (dialog.querySelector('video')) return;
+    if (dialog.querySelector('video')) {
+      console.log('[inject-debug] returned: video found');
+      return;
+    }
 
     const r     = stickerBtn.getBoundingClientRect();
     const rowEl = stickerBtn.parentElement;
@@ -1822,6 +1838,7 @@
     const top  = ref.top + (ref.height - 23) / 2;
 
     const existing = document.getElementById(TAP_ROOT_ID);
+    console.log('[inject-debug] existing:', !!existing, 'isConnected:', existing?.isConnected);
     if (existing && existing.isConnected) {
       // Element exists AND is in the DOM — just reposition
       existing._tapDialog = dialog;
@@ -1832,6 +1849,7 @@
         existing.style.left = `${rect.right + 4}px`;
         existing.style.top  = `${rect.top + (rect.height - 24) / 2}px`;
       }
+      console.log('[inject-debug] returned: already connected');
       return;
     }
 
@@ -1843,6 +1861,7 @@
       // Fall through to create new element
     }
 
+    console.log('[inject-debug] about to append T icon');
     const tapRoot = buildTapRoot(dialog);
 
     // Find the toolbar container — parent of sticker button
@@ -1850,6 +1869,7 @@
 
     if (!toolbar) {
       document.body.appendChild(tapRoot);
+      console.log('[inject-debug] T icon appended, isConnected:', tapRoot.isConnected);
       tapIconExists = true;
       console.log('[Tapfill] tapIconExists = true');
       console.log('[Tapfill-debug] T icon appended');
@@ -1883,6 +1903,7 @@
 
     // Insert after sticker button inside toolbar
     stickerBtn.insertAdjacentElement('afterend', tapRoot);
+    console.log('[inject-debug] T icon appended, isConnected:', tapRoot.isConnected);
     tapIconExists = true;
     console.log('[Tapfill] tapIconExists = true');
     console.log('[Tapfill] T icon injected inline in toolbar ✓');
