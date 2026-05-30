@@ -42,7 +42,7 @@
     '[aria-label="Sticker"]',
   ];
   const STICKER_SEL = STICKER_SEL_OPTIONS.join(',');
-  const TEXTBOX_SEL = '[contenteditable="true"][role="textbox"]';
+  const TEXTBOX_SEL = '[contenteditable="true"][role="textbox"], #contenteditable-root[contenteditable="true"]';
 
   // Temperature mapping:
   //   low  (0.2) → precise, formal output
@@ -1979,5 +1979,8 @@
   }
   setTimeout(sendHeartbeat, 10000);               // first ping 10s after page load
   setInterval(sendHeartbeat, 30 * 60 * 1000);     // then every 30 minutes
+
+  // Expose panel opener for other content scripts (e.g. yt-content.js)
+  window._tapfillOpen = openTapMenu;
 
 })();

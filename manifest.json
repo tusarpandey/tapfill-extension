@@ -78,7 +78,7 @@
     },
     {
       "matches": ["*://*.youtube.com/*"],
-      "js": ["yt-content.js"],
+      "js": ["fb-content.js", "yt-content.js"],
       "run_at": "document_idle"
     }
   ]

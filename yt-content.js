@@ -15,7 +15,6 @@
   // ─── State ────────────────────────────────────────────────────────────────────
   let textboxFocused    = false;
   let lastInjectionTime = 0;
-  let _tapDialog        = null;
 
   // ─── Token check ──────────────────────────────────────────────────────────────
   function getToken(cb) {
@@ -101,7 +100,7 @@
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      handleTapClick();
+      handleTapClick(btn);
     });
 
     return btn;
@@ -122,9 +121,8 @@
       return;
     }
 
-    _tapDialog = document.querySelector('ytd-commentbox') || document.body;
-
     const tapBtn = buildTapButton();
+    tapBtn._tapDialog = document.querySelector('ytd-commentbox') || document.body;
     actionRow.insertBefore(tapBtn, actionRow.firstChild);
 
     lastInjectionTime = now;
@@ -132,45 +130,17 @@
   }
 
   // ─── Handle T icon click ──────────────────────────────────────────────────────
-  function handleTapClick() {
+  function handleTapClick(btn) {
     getToken((token) => {
       if (!token) {
         chrome.runtime.sendMessage({ type: 'OPEN_CONNECT' });
         return;
       }
-      openTapfillPanel();
+      // Use the shared panel from fb-content.js (loaded first on YouTube)
+      if (typeof window._tapfillOpen === 'function') {
+        window._tapfillOpen(btn);
+      }
     });
-  }
-
-  // ─── Open Tapfill panel ───────────────────────────────────────────────────────
-  function openTapfillPanel() {
-    chrome.runtime.sendMessage({
-      type:     'OPEN_PANEL',
-      platform: 'youtube',
-      url:      window.location.href,
-      postText: scrapePostText(),
-    });
-  }
-
-  // ─── Scrape post text ─────────────────────────────────────────────────────────
-  function scrapePostText() {
-    const title = document.querySelector(
-      'h1.ytd-video-primary-info-renderer yt-formatted-string, ' +
-      '#title h1 yt-formatted-string, ' +
-      'ytd-video-primary-info-renderer h1'
-    );
-    if (title?.textContent?.trim()) {
-      return title.textContent.trim();
-    }
-
-    const shortsTitle = document.querySelector(
-      'ytd-reel-video-renderer[is-active] .title, #shorts-title'
-    );
-    if (shortsTitle?.textContent?.trim()) {
-      return shortsTitle.textContent.trim();
-    }
-
-    return document.title || '';
   }
 
   // ─── Focus detection ──────────────────────────────────────────────────────────
