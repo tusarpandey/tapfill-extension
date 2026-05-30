@@ -1778,32 +1778,47 @@
   function injectTapRoot(container) {
     if (!container.querySelectorAll) return;
 
-    // Facebook has two elements matching STICKER_SEL: the visible toolbar icon
-    // (small x, inside the card) and a hidden React overlay (large x, outside the
-    // Use sticker-specific selectors only — emoji selectors sit to the LEFT
-    // of the sticker button and would cause the T icon to overlap them.
-    const toolbarButtons = [...document.querySelectorAll(
-      '[aria-label="Comment with a sticker"],[aria-label="Comment with a Sticker"]'
+    // Find all visible toolbar buttons sorted left to right
+    const allToolbarBtns = [...document.querySelectorAll(
+      '[aria-label="Comment with a sticker"],[aria-label="Comment with a Sticker"],' +
+      '[aria-label="Insert an emoji"],' +
+      '[aria-label="Comment with a GIF"],' +
+      '[aria-label="Attach a photo or video"],' +
+      '[aria-label="Comment with an avatar sticker"],' +
+      '[aria-label="Give Stars"]'
     )].filter(el => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0
-        && r.left < window.innerWidth
-        && r.left > 0;
-    });
+      return r.width > 0
+        && r.height > 0
+        && r.left > 0
+        && r.left < window.innerWidth;
+    }).sort((a, b) =>
+      a.getBoundingClientRect().left - b.getBoundingClientRect().left
+    );
 
-    if (!toolbarButtons.length) return;
+    if (allToolbarBtns.length < 1) return;
 
-    const anchor     = toolbarButtons[0];
-    const anchorRect = anchor.getBoundingClientRect();
+    // Get the rightmost button (sticker)
+    const rightmost     = allToolbarBtns[allToolbarBtns.length - 1];
+    const rightmostRect = rightmost.getBoundingClientRect();
 
-    const dialog = anchor.closest('[role="dialog"]');
+    const dialog = rightmost.closest('[role="dialog"]');
     if (!dialog) return;
 
     // Removed: was blocking T icon on Facebook Reels
     // if (dialog.querySelector('video')) return;
 
-    const left = anchorRect.right + 4;
-    const top  = anchorRect.top + (anchorRect.height - 23) / 2;
+    // Calculate gap between rightmost and second-to-last icon
+    let iconGap = 8; // fallback
+    if (allToolbarBtns.length >= 2) {
+      const secondToLast     = allToolbarBtns[allToolbarBtns.length - 2];
+      const secondToLastRect = secondToLast.getBoundingClientRect();
+      iconGap = rightmostRect.left - secondToLastRect.right;
+      console.log('[Tapfill] icon gap:', iconGap, 'px');
+    }
+
+    const left = rightmostRect.right + iconGap;
+    const top  = rightmostRect.top + (rightmostRect.height - 23) / 2;
 
     const existing = document.getElementById(TAP_ROOT_ID);
     if (existing) {
