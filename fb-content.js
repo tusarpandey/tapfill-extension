@@ -2026,6 +2026,31 @@
   let tapIconExists = false; // track if T icon is in DOM
 
   function positionAndShow() {
+    // ── Debug: scan all visible toolbar buttons ──────────────────────────────
+    const commentBox = document.querySelector('[contenteditable="true"][role="textbox"]');
+    if (commentBox) {
+      const form = commentBox.closest('form') || commentBox.parentElement?.parentElement?.parentElement;
+      if (form) {
+        const allBtns = form.querySelectorAll('[role="button"], button, div[tabindex="0"]');
+        allBtns.forEach(b => {
+          const r = b.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            console.log(
+              'aria-label:', b.getAttribute('aria-label'),
+              '| role:', b.getAttribute('role'),
+              '| title:', b.getAttribute('title'),
+              '| pos:', Math.round(r.left), Math.round(r.top)
+            );
+          }
+        });
+      } else {
+        console.log('form not found');
+      }
+    } else {
+      console.log('comment box not found');
+    }
+    // ── End debug ─────────────────────────────────────────────────────────────
+
     document.querySelectorAll(STICKER_SEL).forEach((s) => {
       injectTapRoot(resolveDialog(s));
     });
