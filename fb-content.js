@@ -1802,86 +1802,53 @@
     // Removed: was blocking T icon on Facebook Reels
     // if (dialog.querySelector('video')) return;
 
-    const stickerRect = stickerBtn.getBoundingClientRect();
+    const r     = stickerBtn.getBoundingClientRect();
+    const rowEl = stickerBtn.parentElement;
+    const rowR  = rowEl?.getBoundingClientRect();
+    const ref   = (rowR && rowR.height > 0 && rowR.height <= 48) ? rowR : r;
+
+    // Match gap between T icon and sticker to the natural inter-icon spacing.
+    let iconGap = 8;
+    if (rowEl) {
+      const cssGap = parseFloat(getComputedStyle(rowEl).columnGap);
+      if (cssGap > 0 && cssGap < 30) {
+        iconGap = cssGap;
+      } else {
+        const prev = stickerBtn.previousElementSibling;
+        if (prev) {
+          const pR       = prev.getBoundingClientRect();
+          const measured = r.left - pR.right;
+          if (measured >= 0 && measured < 30) iconGap = measured;
+        }
+      }
+    }
+
+    const left = r.right + iconGap + 2;
+    const top  = ref.top + (ref.height - 23) / 2;
 
     const existing = document.getElementById(TAP_ROOT_ID);
-    if (existing && existing.isConnected) {
+    if (existing) {
+      existing.style.left = `${left}px`;
+      existing.style.top  = `${top}px`;
       existing._tapDialog = dialog;
-      existing.style.left = `${stickerRect.right + 4}px`;
-      existing.style.top  = `${stickerRect.top + (stickerRect.height - 23) / 2}px`;
       return;
     }
 
-    if (existing && !existing.isConnected) {
-      existing.remove();
-    }
-
     const tapRoot = buildTapRoot(dialog);
-
-    // Position T icon just to the right of sticker button
     tapRoot.style.position = 'fixed';
-    tapRoot.style.left     = `${stickerRect.right + 4}px`;
-    tapRoot.style.top      = `${stickerRect.top + (stickerRect.height - 23) / 2}px`;
-    tapRoot.style.zIndex   = '2147483647';
-    tapRoot.style.display  = 'inline-flex';
-    tapRoot.style.width    = '23px';
-    tapRoot.style.height   = '23px';
-    tapRoot.style.cursor   = 'pointer';
-    tapRoot.style.margin   = '0';
-    tapRoot.style.padding  = '0';
+    tapRoot.style.left     = `${left}px`;
+    tapRoot.style.top      = `${top}px`;
+    tapRoot.style.zIndex   = '999999';
 
-    // Always append to document.body — outside React tree
     document.body.appendChild(tapRoot);
-    console.log('[Tapfill] T icon injected at:', stickerRect.right + 4, stickerRect.top);
-    tapIconExists = true;
-
-    // Watch if Facebook removes it and re-inject (max 3 times, 5s window)
-    let reinjectionCount = 0;
-    const MAX_REINJECTIONS = 3;
-
-    const tapObserver = new MutationObserver(() => {
-      if (!document.getElementById('tap-root') && reinjectionCount < MAX_REINJECTIONS) {
-        tapIconExists = false;
-        reinjectionCount++;
-        const newSticker = [...document.querySelectorAll(STICKER_SEL_OPTIONS.join(','))].find(el => {
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0 && r.left <= window.innerWidth && r.right >= 0 && r.top <= window.innerHeight && r.bottom >= 0;
-        });
-        if (newSticker) {
-          const newRect = newSticker.getBoundingClientRect();
-          tapRoot.style.left = `${newRect.right + 4}px`;
-          tapRoot.style.top  = `${newRect.top + (newRect.height - 23) / 2}px`;
-          document.body.appendChild(tapRoot);
-        }
-      }
-    });
-
-    tapObserver.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => tapObserver.disconnect(), 5000);
+    console.log('[Tapfill] #tap-root injected ✓', { left, top }, tapRoot);
   }
 
   // ─── Show / hide helpers ──────────────────────────────────────────────────────
 
   function showTapRoot() {
-    const el = document.getElementById(TAP_ROOT_ID);
-
-    if (!el || !el.isConnected) {
-      console.log('[Tapfill] showTapRoot — element missing, triggering re-inject');
-      tapIconExists = false; // allow re-injection
-      setTimeout(() => {
-        if (!document.getElementById(TAP_ROOT_ID) && textboxFocused) {
-          console.log('[Tapfill] showTapRoot — re-injecting...');
-          document.querySelectorAll(STICKER_SEL_OPTIONS.join(','))
-            .forEach(s => injectTapRoot(resolveDialog(s)));
-        }
-      }, 100);
-      return;
-    }
-
-    // Element exists — show it
-    el.style.display    = 'inline-flex';
-    el.style.visibility = 'visible';
-    el.style.opacity    = '1';
+    const btn = document.getElementById(TAP_ROOT_ID);
+    if (btn) btn.style.display = 'inline-flex';
   }
 
   function hideTapRoot() {
@@ -1946,34 +1913,8 @@
 
   let tapHideTimer   = null;
   let textboxFocused = false;
-  let tapIconExists  = false; // track if T icon is in DOM
 
   function positionAndShow() {
-    // ── Debug: scan all visible toolbar buttons ──────────────────────────────
-    const commentBox = document.querySelector('[contenteditable="true"][role="textbox"]');
-    if (commentBox) {
-      const form = commentBox.closest('form') || commentBox.parentElement?.parentElement?.parentElement;
-      if (form) {
-        const allBtns = form.querySelectorAll('[role="button"], button, div[tabindex="0"]');
-        allBtns.forEach(b => {
-          const r = b.getBoundingClientRect();
-          if (r.width > 0 && r.height > 0) {
-            console.log(
-              'aria-label:', b.getAttribute('aria-label'),
-              '| role:', b.getAttribute('role'),
-              '| title:', b.getAttribute('title'),
-              '| pos:', Math.round(r.left), Math.round(r.top)
-            );
-          }
-        });
-      } else {
-        console.log('form not found');
-      }
-    } else {
-      console.log('comment box not found');
-    }
-    // ── End debug ─────────────────────────────────────────────────────────────
-
     document.querySelectorAll(STICKER_SEL).forEach((s) => {
       injectTapRoot(resolveDialog(s));
     });
@@ -1990,44 +1931,33 @@
       textboxFocused = true;
       clearTimeout(tapHideTimer);
 
-      // Give toolbar time to render — try at 4 increasing delays
-      [300, 600, 1000, 1500].forEach(delay => {
-        setTimeout(() => {
-          if (!textboxFocused) return;
+      // Fast path — toolbar usually ready within 100 ms
+      setTimeout(() => {
+        if (!textboxFocused) return;
+        console.log('[Tapfill] focusin attempt 1');
+        positionAndShow();
+      }, 100);
 
-          // Check if already injected and connected
-          const existing = document.getElementById('tap-root');
-          if (existing && existing.isConnected) {
-            console.log(`[Tapfill] ${delay}ms — already injected, skipping`);
-            return;
-          }
-
-          console.log(`[Tapfill] ${delay}ms — attempting injection`);
-          positionAndShow();
-
-        }, delay);
-      });
+      // Slow path — covers toolbars with longer CSS transitions
+      setTimeout(() => {
+        if (!textboxFocused) return;
+        console.log('[Tapfill] focusin attempt 2');
+        positionAndShow();
+      }, 350);
     }
   }, true);
 
   document.addEventListener('focusout', (e) => {
-    // Small delay to allow click on T icon
-    setTimeout(() => {
-      const active  = document.activeElement;
-      const tapRoot = document.getElementById('tap-root');
-
-      // If focus went to T icon — keep it visible
-      if (active && active.id === 'tap-root') return;
-      if (active && active.closest('#tap-root')) return;
-
-      // Otherwise hide T icon
-      if (tapRoot) {
-        tapRoot.style.opacity    = '0';
-        tapRoot.style.visibility = 'hidden';
-      }
-
+    const target = e.target;
+    if (
+      target.nodeType === Node.ELEMENT_NODE &&
+      target.getAttribute('contenteditable') === 'true' &&
+      target.getAttribute('role') === 'textbox'
+    ) {
       textboxFocused = false;
-    }, 200);
+      // Delay so T-button mousedown (which keeps text-box focus) runs first.
+      tapHideTimer = setTimeout(hideTapRoot, 200);
+    }
   }, true);
 
   // ─── Immediate scan ───────────────────────────────────────────────────────────
