@@ -170,12 +170,15 @@
       return;
     }
 
-    // Walk up from the anchor button to find the flex toolbar row
-    // (the actual row that contains all toolbar icon slots as direct children)
+    // Walk up from the anchor button to find the horizontal flex toolbar row.
+    // Skip flex-column wrappers (e.g. the button+label column around the flag icon).
     let flexRow = anchor.parentElement;
     while (flexRow && flexRow !== document.body) {
       const s = window.getComputedStyle(flexRow);
-      if ((s.display === 'flex' || s.display === 'inline-flex') && flexRow.children.length >= 3) break;
+      const isHorizFlex = (s.display === 'flex' || s.display === 'inline-flex')
+                          && s.flexDirection !== 'column'
+                          && s.flexDirection !== 'column-reverse';
+      if (isHorizFlex && flexRow.children.length >= 3) break;
       flexRow = flexRow.parentElement;
     }
     if (!flexRow || flexRow === document.body) {
