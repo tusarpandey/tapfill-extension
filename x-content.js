@@ -170,12 +170,33 @@
       return;
     }
 
-    const toolbarContainer = anchor.parentElement;
-    console.log('[Tapfill-X] toolbar container:', toolbarContainer?.tagName,
-      'display:', window.getComputedStyle(toolbarContainer)?.display);
+    // Walk up from the anchor button to find the flex toolbar row
+    // (the actual row that contains all toolbar icon slots as direct children)
+    let flexRow = anchor.parentElement;
+    while (flexRow && flexRow !== document.body) {
+      const s = window.getComputedStyle(flexRow);
+      if ((s.display === 'flex' || s.display === 'inline-flex') && flexRow.children.length >= 3) break;
+      flexRow = flexRow.parentElement;
+    }
+    if (!flexRow || flexRow === document.body) {
+      console.log('[Tapfill-X] flex row not found — falling back to anchor parent');
+      flexRow = anchor.parentElement;
+    }
+
+    // Find the direct child of the flex row that contains our anchor
+    let anchorSlot = anchor;
+    while (anchorSlot.parentElement !== flexRow) {
+      anchorSlot = anchorSlot.parentElement;
+      if (!anchorSlot) break;
+    }
+    if (!anchorSlot) anchorSlot = anchor;
+
+    console.log('[Tapfill-X] flexRow:', flexRow.tagName,
+      'display:', window.getComputedStyle(flexRow).display,
+      'children:', flexRow.children.length);
 
     const tapBtn = buildTapButton();
-    anchor.insertAdjacentElement('afterend', tapBtn);
+    anchorSlot.insertAdjacentElement('afterend', tapBtn);
     lastInjectionTime = now;
     console.log('[Tapfill-X] T icon injected ✓');
   }
