@@ -30,6 +30,9 @@
     "https://www.linkedin.com/*",
     "https://*.youtube.com/*",
     "*://img.youtube.com/*",
+    "*://*.twitter.com/*",
+    "*://*.x.com/*",
+    "*://pbs.twimg.com/*",
     "https://generativelanguage.googleapis.com/*",
     "https://tapfill-saas.vercel.app/*",
     "https://tapfill.io/*",
@@ -52,7 +55,9 @@
         "https://*.pinterest.com/*",
         "https://www.instagram.com/*",
         "https://www.linkedin.com/*",
-        "*://*.youtube.com/*"
+        "*://*.youtube.com/*",
+        "*://*.twitter.com/*",
+        "*://*.x.com/*"
       ]
     }
   ],
@@ -80,6 +85,11 @@
     {
       "matches": ["*://*.youtube.com/*"],
       "js": ["fb-content.js", "yt-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.twitter.com/*", "*://*.x.com/*"],
+      "js": ["fb-content.js", "x-content.js"],
       "run_at": "document_idle"
     }
   ]
