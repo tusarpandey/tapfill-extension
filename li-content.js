@@ -349,7 +349,7 @@
       borderRadius:  '16px',
       boxShadow:     '0 8px 32px rgba(0,0,0,0.18)',
       padding:       '14px 12px 12px',
-      width:         '320px',
+      width:         '640px',
       maxWidth:      'calc(100vw - 16px)',
       display:       'flex',
       flexDirection: 'column',
@@ -451,32 +451,74 @@
 
     // Action buttons row
     const actionRow = document.createElement('div');
-    Object.assign(actionRow.style, { display: 'none', gap: '6px' });
+    actionRow.style.cssText = `
+      display: none; align-items: center; gap: 8px;
+      padding: 12px 16px; border-top: 1px solid #f1f5f9;
+    `;
 
     const retryBtn = document.createElement('button');
     retryBtn.type = 'button';
-    retryBtn.textContent = '↺ Refresh';
-    Object.assign(retryBtn.style, {
-      flex: '1', padding: '7px 0', border: '1.5px solid #e2e8f0',
-      borderRadius: '10px', background: 'transparent',
-      color: '#64748b', fontSize: '12px', cursor: 'pointer',
-      fontFamily: 'inherit', fontWeight: '500',
-    });
+    retryBtn.textContent = '↻';
+    retryBtn.style.cssText = `
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; flex-shrink: 0;
+      border: 1px solid #e2e8f0; border-radius: 12px; background: white;
+      cursor: pointer; font-size: 18px; font-family: inherit;
+    `;
     retryBtn.addEventListener('mousedown', e => e.preventDefault());
+
+    const canvasBtn = document.createElement('button');
+    canvasBtn.type = 'button';
+    canvasBtn.textContent = 'Canvas';
+    canvasBtn.style.cssText = `
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 44px; flex: 1;
+      border: 1px solid #e2e8f0; border-radius: 12px; background: white;
+      cursor: pointer; font-size: 14px; font-weight: 500; color: #374151;
+      font-family: inherit;
+    `;
+    canvasBtn.addEventListener('mousedown', e => e.preventDefault());
+    canvasBtn.addEventListener('click', () => {
+      if (!_currentComment) return;
+      chrome.runtime.sendMessage({
+        type: 'OPEN_URL',
+        url: 'https://tapfill.io/canvas?text=' + encodeURIComponent(_currentComment),
+      });
+    });
+
+    const plusCanvasBtn = document.createElement('button');
+    plusCanvasBtn.type = 'button';
+    plusCanvasBtn.textContent = '+ Canvas';
+    plusCanvasBtn.style.cssText = `
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 44px; flex: 1;
+      border: 2px solid #6366f1; border-radius: 12px; background: white;
+      cursor: pointer; font-size: 14px; font-weight: 500; color: #6366f1;
+      font-family: inherit;
+    `;
+    plusCanvasBtn.addEventListener('mousedown', e => e.preventDefault());
+    plusCanvasBtn.addEventListener('click', () => {
+      if (!_currentComment) return;
+      chrome.runtime.sendMessage({
+        type: 'OPEN_URL',
+        url: 'https://tapfill.io/canvas?text=' + encodeURIComponent(_currentComment),
+      });
+    });
 
     const useBtn = document.createElement('button');
     useBtn.type = 'button';
     useBtn.textContent = 'Use this →';
-    Object.assign(useBtn.style, {
-      flex: '2', padding: '7px 0', border: 'none',
-      borderRadius: '10px',
-      background: 'linear-gradient(135deg,#6366f1,#818cf8)',
-      color: '#fff', fontSize: '12px', fontWeight: '600',
-      cursor: 'pointer', fontFamily: 'inherit',
-    });
+    useBtn.style.cssText = `
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 44px; flex: 1;
+      border: none; border-radius: 12px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      cursor: pointer; font-size: 14px; font-weight: 600; color: white;
+      font-family: inherit;
+    `;
     useBtn.addEventListener('mousedown', e => e.preventDefault());
 
-    actionRow.append(retryBtn, useBtn);
+    actionRow.append(retryBtn, canvasBtn, plusCanvasBtn, useBtn);
     resultCard.appendChild(actionRow);
 
     // ── Energy bar ────────────────────────────────────────────────────────────
