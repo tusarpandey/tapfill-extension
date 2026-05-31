@@ -137,26 +137,17 @@
 
   // ─── React-compatible text insertion (contenteditable) ────────────────────────
 
-  function insertTextReact(textbox, text) {
-    textbox.focus();
-    textbox.innerHTML = text;
-
-    const sel   = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(textbox);
-    range.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(range);
-
-    textbox.dispatchEvent(
-      new InputEvent('input', {
-        bubbles:    true,
-        cancelable: true,
-        composed:   true,
-        data:       text,
-        inputType:  'insertText',
-      })
+  function insertTextReact(el, text) {
+    if (!el) return;
+    el.focus();
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+    document.execCommand('insertText', false, text);
+    ['input', 'change', 'keyup'].forEach(type =>
+      el.dispatchEvent(new Event(type, { bubbles: true }))
     );
+    el.focus();
+    console.log('[Tapfill-LI] text inserted via execCommand');
   }
 
   // ─── LinkedIn post / article text scraper ─────────────────────────────────────
@@ -862,10 +853,45 @@
     btn.addEventListener('mouseleave', () => { btn.style.transform = 'scale(1)'; });
     btn.addEventListener('mousedown',  (e) => e.preventDefault());
 
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+
+      if (typeof window._tapfillOpen === 'function') {
+        const textbox = _activeTextbox || document.querySelector(TEXTBOX_SEL);
+        const postText = textbox ? scrapePostText(textbox) : '';
+
+        const liRoot = textbox
+          ? (textbox.closest('.feed-shared-update-v2') || document)
+          : document;
+
+        btn.style.opacity = '0.5';
+        const imageData = await extractPostImage(LI_IMG_SELS, liRoot);
+        btn.style.opacity = '1';
+
+        const wordCount = countMeaningfulWords(postText);
+        let imageMode;
+        if (imageData && wordCount > 0) imageMode = 'image+text';
+        else if (imageData)             imageMode = 'image-only';
+        else                            imageMode = 'text-only';
+
+        btn._tapPostText  = postText;
+        btn._tapPlatform  = 'linkedin';
+        btn._tapImageData = imageData || null;
+        btn._tapImageMode = imageMode;
+        btn._tapDialog    = textbox?.closest('article') ||
+                            textbox?.closest('[data-id]') ||
+                            document.body;
+
+        console.log('[Tapfill-LI] postText:', postText.substring(0, 50));
+        console.log('[Tapfill-LI] imageData:', imageData ? 'YES' : 'NO', '| imageMode:', imageMode);
+
+        window._tapfillOpen(btn);
+        return;
+      }
+
+      // Fallback — old panel if fb-content.js not loaded
       if (document.getElementById(TAP_MENU_ID)) {
         closeTapMenu();
       } else {

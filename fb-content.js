@@ -1736,6 +1736,12 @@
       popupLeft = 10;
     }
 
+    // Center panel on LinkedIn (T icon is positionally unrelated to the post)
+    if (window.location.hostname.includes('linkedin')) {
+      popupLeft = Math.max(10, (viewportWidth  - popupWidth)  / 2);
+      popupTop  = Math.max(10, (viewportHeight - popupHeight) / 2);
+    }
+
     menu.style.position   = 'fixed';
     menu.style.top        = `${popupTop}px`;
     menu.style.left       = `${popupLeft}px`;

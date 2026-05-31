@@ -79,7 +79,7 @@
     },
     {
       "matches": ["https://www.linkedin.com/*"],
-      "js": ["li-content.js"],
+      "js": ["fb-content.js", "li-content.js"],
       "run_at": "document_idle"
     },
     {
