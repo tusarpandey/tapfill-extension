@@ -26,6 +26,58 @@
   // API key is stored securely in background.js only.
   // (model handled server-side via Tapfill SaaS)
 
+  // ─── Captured context (set when Comment button is clicked) ───────────────────
+
+  let _liCapturedContext = { text: '', imageUrl: null };
+
+  document.addEventListener('click', (e) => {
+    const commentBtn = e.target.closest(
+      '[aria-label*="comment" i],' +
+      'button.comment-button,' +
+      '[data-control-name="comment"]'
+    );
+    if (!commentBtn) return;
+
+    const post = commentBtn.closest(
+      '[data-urn],' +
+      '.feed-shared-update-v2,' +
+      '.occludable-update,' +
+      '[data-id],' +
+      'article'
+    ) || commentBtn.closest('div[class*="feed"]')
+      || commentBtn.parentElement?.parentElement?.parentElement?.parentElement;
+
+    if (!post) { console.log('[Tapfill-LI] post not found on click'); return; }
+
+    const textEl = post.querySelector(
+      '[data-test-id="main-feed-activity-card__commentary"],' +
+      '.feed-shared-update-v2__description,' +
+      '.update-components-text,' +
+      '[class*="commentary"]'
+    );
+    _liCapturedContext.text = textEl?.textContent?.trim() || '';
+
+    const feedImg = post.querySelector(
+      'img[src*="feedshare"],' +
+      'img[src*="image-shrink"],' +
+      'img[src*="feedshare-image"],' +
+      '.update-components-image__image,' +
+      '[class*="feed-shared-image"] img'
+    );
+    const videoThumb = post.querySelector('img[src*="videocover"],img[src*="thumbnail"]');
+    const bestImg = feedImg || videoThumb;
+
+    if (bestImg && bestImg.naturalWidth >= 100) {
+      _liCapturedContext.imageUrl = bestImg.src;
+      console.log('[Tapfill-LI] captured image:', bestImg.src.substring(0, 60),
+        bestImg.naturalWidth + 'x' + bestImg.naturalHeight);
+    } else {
+      _liCapturedContext.imageUrl = null;
+      console.log('[Tapfill-LI] no post image found');
+    }
+    console.log('[Tapfill-LI] captured text:', _liCapturedContext.text.substring(0, 50));
+  }, true);
+
   // ─── Constants ────────────────────────────────────────────────────────────────
 
   const TAP_ROOT_ID = 'li-tap-root';
@@ -167,6 +219,10 @@
   // ─── LinkedIn post / article text scraper ─────────────────────────────────────
 
   function scrapePostText(textbox) {
+    if (_liCapturedContext.text) {
+      console.log('[Tapfill-LI] using captured text:', _liCapturedContext.text.substring(0, 50));
+      return _liCapturedContext.text;
+    }
     // Walk up to find the post container, then look for post text
     const container =
       textbox.closest('.comments-comment-box')?.closest('article') ||
@@ -249,63 +305,47 @@
     return cleaned ? cleaned.split(' ').filter(w => w.length > 1).length : 0;
   }
 
-  const LI_IMG_SELS = [
-    '.update-components-image__image',
-    '.feed-shared-image__image',
-    '.update-components-article-image__image',
-    'img[src*="media.licdn.com"]',
-    'img[src*="licdn.com"][src*="/dms/image/"]',
-    '.feed-shared-update-v2__content img[src*="licdn"]',
-    'img.ivm-view-attr__img--centered',
-  ];
-
-  async function extractPostImage(selectors, root) {
-    let imgEl = null;
-    for (const sel of selectors) {
-      const el = (root || document).querySelector(sel);
-      if (el?.src && !el.src.startsWith('data:') && !el.src.startsWith('blob:')
-          && el.naturalWidth >= 80 && el.naturalHeight >= 80) {
-        imgEl = el; break;
-      }
-    }
-    // Fallback: any licdn image in the post container that's large enough
-    if (!imgEl && root && root !== document) {
-      const candidates = [...root.querySelectorAll('img[src*="licdn.com"]')]
-        .filter(el => el.naturalWidth >= 80 && el.naturalHeight >= 80
-          && !el.src.includes('/profile-') && !el.src.includes('ghost-person'));
-      if (candidates.length) {
-        imgEl = candidates.reduce((a, b) =>
-          (a.naturalWidth * a.naturalHeight) > (b.naturalWidth * b.naturalHeight) ? a : b
-        );
-      }
-    }
-    if (!imgEl) return null;
+  async function _fetchImageAsBase64(url) {
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(imgEl.src, { mode: 'cors', signal: controller.signal });
-      clearTimeout(timer);
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (!res.ok) return null;
       const blob = await res.blob();
-      if (blob.size > 5_000_000) return null;
-      const blobUrl = URL.createObjectURL(blob);
-      return await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const MAX = 512;
-          const scale = Math.min(1, MAX / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
-          const cv = document.createElement('canvas');
-          cv.width  = Math.round(img.naturalWidth  * scale);
-          cv.height = Math.round(img.naturalHeight * scale);
-          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-          URL.revokeObjectURL(blobUrl);
-          resolve(cv.toDataURL('image/jpeg', 0.8));
-        };
-        img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
-        img.src = blobUrl;
+      if (blob.size < 5000 || blob.size > 5_000_000) return null;
+      const base64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
       });
+      console.log('[Tapfill-LI] image fetched:', Math.round(blob.size / 1024) + 'KB');
+      return base64;
     } catch { return null; }
   }
+
+  async function scrapePostImage() {
+    // 1. Use captured context (set when Comment button was clicked)
+    if (_liCapturedContext.imageUrl) {
+      console.log('[Tapfill-LI] using captured image:', _liCapturedContext.imageUrl.substring(0, 60));
+      const b64 = await _fetchImageAsBase64(_liCapturedContext.imageUrl);
+      if (b64) return b64;
+    }
+
+    // 2. Fallback — find largest feedshare image visible on page
+    console.log('[Tapfill-LI] no captured image — searching page');
+    const feedImages = [...document.querySelectorAll(
+      'img[src*="feedshare"],img[src*="image-shrink"],img[src*="feedshare-image"]'
+    )].filter(img => img.naturalWidth >= 200);
+
+    if (!feedImages.length) return null;
+    const best = feedImages.reduce((a, b) =>
+      (a.naturalWidth * a.naturalHeight) > (b.naturalWidth * b.naturalHeight) ? a : b
+    );
+    console.log('[Tapfill-LI] fallback image:', best.src.substring(0, 60),
+      best.naturalWidth + 'x' + best.naturalHeight);
+    return _fetchImageAsBase64(best.src);
+  }
+
+  // Keep for legacy call sites
+  async function extractPostImage(_sels, _root) { return scrapePostImage(); }
 
   // ─── SaaS API call — returns { subtle, balanced, bold, powerful } ────────────
 
@@ -317,26 +357,22 @@
       toneObj = { ...toneObj, tonePrompt: await getFilmyTonePrompt() };
     }
 
-    // ── Opt-2: smart image sending ──────────────────────────────────────────
+    // ── Smart image sending ────────────────────────────────────────────────
     const wordCount = countMeaningfulWords(postText);
     let imageMode = 'text-only';
     let imageData  = null;
-    const liRoot = _menuActiveTextbox
-      ? (_menuActiveTextbox.closest('.feed-shared-update-v2') || document)
-      : document;
     if (wordCount > 20) {
       imageMode = 'text-only';
-      console.log(`[Tapfill] text-only mode — caption has ${wordCount} words`);
-    } else if (wordCount >= 1) {
-      imageMode = 'image+text';
-      console.log(`[Tapfill] image+text mode — caption has ${wordCount} words`);
-      imageData = await extractPostImage(LI_IMG_SELS, liRoot);
-      if (!imageData) { console.log('[Tapfill] image extraction failed — falling back to text only'); imageMode = 'text-only'; }
+      console.log(`[Tapfill-LI] text-only — ${wordCount} words`);
     } else {
-      imageMode = 'image-only';
-      console.log('[Tapfill] image-only mode — no meaningful caption found');
-      imageData = await extractPostImage(LI_IMG_SELS, liRoot);
-      if (!imageData) { console.log('[Tapfill] image extraction failed — falling back to text only'); imageMode = 'text-only'; }
+      imageData = await scrapePostImage();
+      if (imageData) {
+        imageMode = wordCount >= 1 ? 'image+text' : 'image-only';
+      } else {
+        imageMode = wordCount >= 1 ? 'text-only' : 'text-only';
+        console.log('[Tapfill-LI] no image — text-only');
+      }
+      console.log(`[Tapfill-LI] imageMode: ${imageMode}`);
     }
 
     return new Promise((resolve, reject) => {
@@ -1231,6 +1267,13 @@
     textboxFocused = false;
     _activeTextbox = null;
     tapHideTimer = setTimeout(hideTapRoot, 200);
+    // Reset captured context 2s after comment box closes (gives T icon click time to use it)
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (!active?.closest('[class*="comment"]')) {
+        _liCapturedContext = { text: '', imageUrl: null };
+      }
+    }, 2000);
   }, true);
 
   // ── Heartbeat — keeps extension_sessions.last_active fresh ──────────────────
