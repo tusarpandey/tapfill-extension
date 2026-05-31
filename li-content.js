@@ -13,6 +13,14 @@
 (function () {
   'use strict';
 
+  // Guard: stop immediately if extension context is already invalid.
+  // chrome.runtime.getURL() silently returns 'chrome-extension://invalid/...'
+  // rather than throwing, so we must check chrome.runtime.id directly.
+  if (!chrome.runtime?.id) {
+    console.log('[Tapfill-LI] extension context invalid — stopping');
+    return;
+  }
+
   // ─── Config ───────────────────────────────────────────────────────────────────
 
   // API key is stored securely in background.js only.
@@ -242,18 +250,33 @@
   }
 
   const LI_IMG_SELS = [
+    '.update-components-image__image',
     '.feed-shared-image__image',
+    '.update-components-article-image__image',
+    'img[src*="media.licdn.com"]',
+    'img[src*="licdn.com"][src*="/dms/image/"]',
     '.feed-shared-update-v2__content img[src*="licdn"]',
     'img.ivm-view-attr__img--centered',
-    '.update-components-image__image',
   ];
 
   async function extractPostImage(selectors, root) {
     let imgEl = null;
     for (const sel of selectors) {
       const el = (root || document).querySelector(sel);
-      if (el?.src && !el.src.startsWith('data:') && !el.src.startsWith('blob:')) {
+      if (el?.src && !el.src.startsWith('data:') && !el.src.startsWith('blob:')
+          && el.naturalWidth >= 80 && el.naturalHeight >= 80) {
         imgEl = el; break;
+      }
+    }
+    // Fallback: any licdn image in the post container that's large enough
+    if (!imgEl && root && root !== document) {
+      const candidates = [...root.querySelectorAll('img[src*="licdn.com"]')]
+        .filter(el => el.naturalWidth >= 80 && el.naturalHeight >= 80
+          && !el.src.includes('/profile-') && !el.src.includes('ghost-person'));
+      if (candidates.length) {
+        imgEl = candidates.reduce((a, b) =>
+          (a.naturalWidth * a.naturalHeight) > (b.naturalWidth * b.naturalHeight) ? a : b
+        );
       }
     }
     if (!imgEl) return null;
@@ -1129,6 +1152,7 @@
     if (!container || container === document.body) return;
 
     _toolbarObserver = new MutationObserver(() => {
+      if (!chrome.runtime?.id) { stopToolbarObserver(); return; }
       if (textboxFocused) positionTapRoot(textbox);
     });
     _toolbarObserver.observe(container, { childList: true, subtree: true });
@@ -1211,6 +1235,7 @@
 
   // ── Heartbeat — keeps extension_sessions.last_active fresh ──────────────────
   function sendHeartbeat() {
+    if (!chrome.runtime?.id) return;
     chrome.runtime.sendMessage({ type: 'HEARTBEAT' }, () => { void chrome.runtime.lastError; });
   }
   setTimeout(sendHeartbeat, 10000);
