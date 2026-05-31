@@ -37,38 +37,30 @@
     return '';
   }
 
-  // ─── Scrape tweet image ───────────────────────────────────────────────────────
+  // ─── Scrape tweet image (dialog-scoped only) ─────────────────────────────────
   async function scrapeTweetImage() {
     try {
-      const allImages = document.querySelectorAll('img[src*="pbs.twimg.com"]');
-      const mediaImages = [...allImages].filter(img => {
-        const src = img.src;
-        if (src.includes('profile_images')) return false;
-        if (src.includes('/media/')) return true;
-        if (src.includes('amplify_video_thumb')) return true;
-        if (src.includes('ext_tw_video_thumb')) return true;
-        return false;
-      });
+      const dialog = document.querySelector('[role="dialog"], [aria-modal="true"]');
+      if (!dialog) return null;
 
-      if (mediaImages.length === 0) {
-        console.log('[Tapfill-X] no tweet media found');
-        return null;
-      }
+      const mediaImages = [...dialog.querySelectorAll(
+        'img[src*="pbs.twimg.com/media/"],' +
+        'img[src*="amplify_video_thumb"],' +
+        'img[src*="ext_tw_video_thumb"]'
+      )].filter(img =>
+        !img.src.includes('profile_images') &&
+        img.naturalWidth > 100 && img.naturalHeight > 100
+      );
 
-      let bestImage = mediaImages[0];
-      let bestSize  = bestImage.naturalWidth * bestImage.naturalHeight;
-      for (const img of mediaImages) {
-        const size = img.naturalWidth * img.naturalHeight;
-        if (size > bestSize) { bestSize = size; bestImage = img; }
-      }
+      console.log('[Tapfill-X] media in dialog:', mediaImages.length);
+      if (mediaImages.length === 0) return null;
 
-      console.log('[Tapfill-X] best image:', bestImage.src.substring(0, 60),
-        bestImage.naturalWidth + 'x' + bestImage.naturalHeight);
+      const best = mediaImages.reduce((a, b) =>
+        (a.naturalWidth * a.naturalHeight) > (b.naturalWidth * b.naturalHeight) ? a : b
+      );
 
-      let imageUrl = bestImage.src;
-      imageUrl = imageUrl.replace('name=medium', 'name=large')
-                         .replace('name=small',  'name=large');
-
+      const imageUrl = best.src.replace('name=medium', 'name=large')
+                                .replace('name=small',  'name=large');
       const response = await fetch(imageUrl);
       if (!response.ok) throw new Error('fetch failed');
       const blob = await response.blob();
@@ -80,13 +72,45 @@
         reader.readAsDataURL(blob);
       });
 
-      console.log('[Tapfill-X] image fetched:', Math.round(blob.size / 1024) + 'KB');
+      console.log('[Tapfill-X] image:', Math.round(blob.size / 1024) + 'KB');
       return base64;
     } catch (err) {
-      console.error('[Tapfill-X] image fetch error:', err);
+      console.error('[Tapfill-X] image error:', err);
       return null;
     }
   }
+
+  // ─── Paste text into X reply box (async, React-compatible) ───────────────────
+  async function pasteIntoXReplyBox(text) {
+    const replyBox = document.querySelector('[data-testid="tweetTextarea_0"]');
+    if (!replyBox) return;
+
+    replyBox.focus();
+    await new Promise(r => setTimeout(r, 150));
+
+    const sel   = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(replyBox);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    await new Promise(r => setTimeout(r, 50));
+
+    document.execCommand('delete', false, null);
+    await new Promise(r => setTimeout(r, 50));
+
+    document.execCommand('insertText', false, text);
+    await new Promise(r => setTimeout(r, 100));
+
+    ['input', 'change', 'keyup'].forEach(type =>
+      replyBox.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }))
+    );
+
+    replyBox.focus();
+    console.log('[Tapfill-X] paste complete');
+  }
+
+  // Expose for fb-content.js shared panel
+  window._tapfillXPaste = pasteIntoXReplyBox;
 
   // ─── Build T icon ─────────────────────────────────────────────────────────────
   function buildTapButton() {
@@ -219,13 +243,16 @@
     const target = e.target;
     if (!target) return;
 
-    const isReplyBox = (
+    const isReplyTextarea = (
       target.getAttribute('data-testid') === 'tweetTextarea_0' ||
-      (target.getAttribute('role') === 'textbox' &&
-        !!target.closest('[data-testid="tweetTextarea_0"]')) ||
-      !!target.closest('[data-testid="tweetTextarea_0"]')
+      target.closest('[data-testid="tweetTextarea_0"]')
+        ?.getAttribute('data-testid') === 'tweetTextarea_0'
     );
-    if (!isReplyBox) return;
+    if (!isReplyTextarea) return;
+
+    // Only inject when a reply dialog is actually open
+    const dialog = document.querySelector('[role="dialog"], [aria-modal="true"]');
+    if (!dialog) return;
 
     textboxFocused = true;
     console.log('[Tapfill-X] reply box focused');
@@ -243,6 +270,10 @@
   // ─── Focusout ─────────────────────────────────────────────────────────────────
   document.addEventListener('focusout', () => {
     setTimeout(() => {
+      // Keep T icon while reply dialog is still open
+      const dialog = document.querySelector('[role="dialog"], [aria-modal="true"]');
+      if (dialog) return;
+
       const active = document.activeElement;
       if (active?.id === TAP_ROOT_ID) return;
       if (active?.closest(`#${TAP_ROOT_ID}`)) return;
@@ -252,9 +283,9 @@
       const tapRoot = document.getElementById(TAP_ROOT_ID);
       if (tapRoot) {
         tapRoot.style.opacity = '0';
-        setTimeout(() => { if (!textboxFocused) tapRoot?.remove(); }, 300);
+        setTimeout(() => { if (!textboxFocused) tapRoot?.remove(); }, 500);
       }
-    }, 200);
+    }, 500);
   }, true);
 
   // ─── Watch for dynamically loaded reply boxes ─────────────────────────────────

@@ -1578,7 +1578,10 @@
       const textbox =
         (_menuActiveDialog && _menuActiveDialog.querySelector(TEXTBOX_SEL)) ||
         document.querySelector(TEXTBOX_SEL);
-      if (textbox) {
+      if (typeof window._tapfillXPaste === 'function') {
+        // X/Twitter: use async Draft.js-compatible paste
+        window._tapfillXPaste(_currentComment);
+      } else if (textbox) {
         insertTextReact(textbox, _currentComment);
         requestAnimationFrame(() =>
           textbox.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
