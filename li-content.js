@@ -347,8 +347,7 @@
       zIndex:        '9999999',
       background:    '#ffffff',
       borderRadius:  '16px',
-      boxShadow:     '0 8px 32px rgba(0,0,0,0.18)',
-      padding:       '14px 12px 12px',
+      boxShadow:     '0 20px 60px rgba(0,0,0,0.15)',
       width:         '640px',
       maxWidth:      'calc(100vw - 16px)',
       display:       'flex',
@@ -361,17 +360,18 @@
     // ── Header ──────────────────────────────────────────────────────────────
     const header = document.createElement('div');
     Object.assign(header.style, {
-      fontSize: '11px', fontWeight: '600', color: '#94a3b8',
+      fontSize: '11px', fontWeight: '700', color: '#94a3b8',
       letterSpacing: '0.08em', textTransform: 'uppercase',
-      marginBottom: '10px', paddingLeft: '2px',
+      padding: '16px 16px 8px 16px',
     });
-    header.textContent = 'Choose a tone';
+    header.textContent = 'HOW DO YOU WANT TO SHOW UP?';
     menu.appendChild(header);
 
     // ── Chips row ────────────────────────────────────────────────────────────
     const chipsRow = document.createElement('div');
     Object.assign(chipsRow.style, {
       display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px',
+      padding: '12px 16px',
     });
     menu.appendChild(chipsRow);
 
@@ -453,7 +453,7 @@
     const actionRow = document.createElement('div');
     actionRow.style.cssText = `
       display: none; align-items: center; gap: 8px;
-      padding: 12px 16px; border-top: 1px solid #f1f5f9;
+      padding: 12px 16px 16px 16px; border-top: 1px solid #f1f5f9;
     `;
 
     const retryBtn = document.createElement('button');
@@ -461,7 +461,7 @@
     retryBtn.textContent = '↻';
     retryBtn.style.cssText = `
       display: inline-flex; align-items: center; justify-content: center;
-      width: 44px; height: 44px; flex-shrink: 0;
+      width: 44px; height: 44px; min-width: 44px; flex-shrink: 0;
       border: 1px solid #e2e8f0; border-radius: 12px; background: white;
       cursor: pointer; font-size: 18px; font-family: inherit;
     `;
@@ -525,7 +525,7 @@
     const ENERGIES = [
       { label: 'Subtle',   key: 'subtle'   },
       { label: 'Balanced', key: 'balanced' },
-      { label: 'Strong',   key: 'bold'     },
+      { label: 'Bold',     key: 'bold'     },
       { label: 'Powerful', key: 'powerful' },
     ];
     const ENERGY_LABEL_STYLES = [
@@ -732,17 +732,19 @@
       closeTapMenu();
     });
 
-    const visibleTones = (['community_pro', 'creator'].includes(_userPlan) ? [...TONES, ...CREATOR_TONES] : TONES)
-      .slice()
-      .sort((a, b) => {
-        const ai = _toneOrder.indexOf(a.tone);
-        const bi = _toneOrder.indexOf(b.tone);
-        if (ai === -1 && bi === -1) return 0;
-        if (ai === -1) return 1;
-        if (bi === -1) return -1;
-        return ai - bi;
-      });
-    visibleTones.forEach((toneObj) => {
+    const ALL_10_TONES = [
+      { emoji: '🎩', label: 'Classic',   tone: 'classic',    temp: 0.2 },
+      { emoji: '🌻', label: 'Friendly',  tone: 'friendly',   temp: 0.5 },
+      { emoji: '💎', label: 'Confident', tone: 'confident',  temp: 0.3 },
+      { emoji: '😄', label: 'Funny',     tone: 'funny',      temp: 0.9 },
+      { emoji: '🎬', label: 'Filmy',     tone: 'filmy',      temp: 0.8 },
+      { emoji: '⚡', label: 'Bold',      tone: 'bold_tone',  temp: 0.9, tonePrompt: 'Write a sharp, edgy, unapologetic comment. Says what everyone is thinking but nobody says out loud. Strong take delivered with conviction. No softening, no hedging.' },
+      { emoji: '🦉', label: 'Wise',      tone: 'wise',       temp: 0.4, tonePrompt: 'Write a thoughtful, philosophical comment like a mentor speaking. Deep insight, quotable, the kind of comment people screenshot and share.' },
+      { emoji: '🔥', label: 'Hype',      tone: 'hype',       temp: 0.9, tonePrompt: 'Write an energetic, enthusiastic comment full of excitement. Like a best friend cheering someone on. High energy, motivating, celebratory.' },
+      { emoji: '😏', label: 'Sarcastic', tone: 'sarcastic',  temp: 0.8, tonePrompt: 'Write a dry, clever, subtly sarcastic comment. The kind that makes people laugh and think at the same time. Smart sarcasm, not mean or offensive.' },
+      { emoji: '🪄', label: 'Desi',      tone: 'desi',       temp: 0.9, tonePrompt: 'Write a funny, relatable, quintessentially Indian humor comment. Use cultural references, Indian expressions, light sarcasm. The kind of comment that makes an Indian say yaar yeh toh bilkul sach hai.' },
+    ];
+    ALL_10_TONES.forEach((toneObj) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       Object.assign(chip.style, {
@@ -751,7 +753,7 @@
         alignItems:    'center',
         gap:           '5px',
         padding:       '8px 6px',
-        border:        '2px solid transparent',
+        border:        '2px solid #e2e8f0',
         borderRadius:  '12px',
         background:    '#f8fafc',
         cursor:        'pointer',
@@ -793,7 +795,7 @@
         _lastCopied = false;
         if (_selectedChip && _selectedChip !== chip) {
           _selectedChip.style.background  = '#f8fafc';
-          _selectedChip.style.borderColor = 'transparent';
+          _selectedChip.style.borderColor = '#e2e8f0';
           _selectedChip.querySelector('span:last-child').style.color = '#64748b';
         }
         _selectedChip = chip;
@@ -804,8 +806,8 @@
           energyDots[1].style.background = '#6366f1';
           _currentEnergyIdx = 1;
         }
-        chip.style.background  = '#eef2ff';
-        chip.style.borderColor = '#818cf8';
+        chip.style.background  = '#f5f3ff';
+        chip.style.borderColor = '#6366f1';
         labelEl.style.color    = '#6366f1';
         generateForTone(toneObj);
       });
@@ -827,21 +829,14 @@
 
     const { menu } = buildTapMenu();
 
-    const bRect   = tapRootBtn.getBoundingClientRect();
-    const POPUP_W = 320;
-    const menuH   = menu.offsetHeight || 320;
-
-    const GAP = 8;
-    let top  = bRect.top - menuH - GAP;
-    let left = bRect.left;
-
-    if (top < GAP) top = bRect.bottom + GAP;
-    if (top + menuH > window.innerHeight - GAP) top = window.innerHeight - menuH - GAP;
-    if (left + POPUP_W > document.documentElement.clientWidth - GAP) left = document.documentElement.clientWidth - POPUP_W - GAP;
-    if (left < GAP) left = GAP;
+    const POPUP_W = 640;
+    const POPUP_H = 520;
+    const left = Math.max(8, (window.innerWidth  - POPUP_W) / 2);
+    const top  = Math.max(8, (window.innerHeight - POPUP_H) / 2);
 
     menu.style.top        = `${top}px`;
     menu.style.left       = `${left}px`;
+    menu.style.zIndex     = '2147483647';
     menu.style.visibility = '';
 
     setTimeout(() => document.addEventListener('click', onClickAway, true), 0);
