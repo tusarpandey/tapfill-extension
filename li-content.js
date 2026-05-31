@@ -127,7 +127,13 @@
     if (document.getElementById('li-tap-styles')) return;
     const s = document.createElement('style');
     s.id = 'li-tap-styles';
-    s.textContent = '@keyframes li-tap-spin{to{transform:rotate(360deg)}}';
+    s.textContent = [
+      '@keyframes li-tap-spin{to{transform:rotate(360deg)}}',
+      '@keyframes li-tap-vibe-pulse{0%,100%{opacity:0.45}50%{opacity:1}}',
+      '.li-tap-vibe-text{font-size:13px;font-weight:600;color:#6366f1;animation:li-tap-vibe-pulse 1.4s ease-in-out infinite;letter-spacing:0.01em}',
+      '@keyframes li-tap-word-magic{0%{opacity:0.2;transform:perspective(360px) rotateY(90deg) scale(1.15)}50%{opacity:1;transform:perspective(360px) rotateY(-10deg)}100%{opacity:1;transform:perspective(360px) rotateY(0deg)}}',
+      '.li-tap-word-magic{display:inline-block;animation:li-tap-word-magic 0.45s cubic-bezier(0.34,1.45,0.64,1) both}',
+    ].join('');
     document.head.appendChild(s);
   }
 
@@ -348,7 +354,8 @@
       background:    '#ffffff',
       borderRadius:  '16px',
       boxShadow:     '0 20px 60px rgba(0,0,0,0.15)',
-      width:         '640px',
+      padding:       '14px 12px 12px',
+      width:         '320px',
       maxWidth:      'calc(100vw - 16px)',
       display:       'flex',
       flexDirection: 'column',
@@ -362,7 +369,7 @@
     Object.assign(header.style, {
       fontSize: '11px', fontWeight: '700', color: '#94a3b8',
       letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '16px 16px 8px 16px',
+      marginBottom: '10px', paddingLeft: '2px',
     });
     header.textContent = 'HOW DO YOU WANT TO SHOW UP?';
     menu.appendChild(header);
@@ -371,49 +378,159 @@
     const chipsRow = document.createElement('div');
     Object.assign(chipsRow.style, {
       display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px',
-      padding: '12px 16px',
     });
     menu.appendChild(chipsRow);
 
-    // ── Language row ──────────────────────────────────────────────────────────
-    const langRow = document.createElement('div');
-    Object.assign(langRow.style, { display: 'flex', gap: '6px', marginTop: '8px' });
-    const LANG_OPTIONS = [
-      { key: 'english',  label: 'English' },
-      { key: 'hindi',    label: 'Hindi' },
-      { key: 'hinglish', label: 'Hinglish' },
+    // ── Language section (chips + inline Change picker) ───────────────────────
+    const ALL_LANGS_GROUPED = [
+      { group: 'Indian',      langs: ['English', 'Hindi', 'Hinglish', 'Bengali', 'Telugu', 'Marathi'] },
+      { group: 'Middle East', langs: ['Arabic', 'Urdu', 'Turkish'] },
+      { group: 'East Asian',  langs: ['Japanese', 'Korean', 'Mandarin'] },
+      { group: 'SE Asian',    langs: ['Bahasa Indonesia', 'Filipino', 'Vietnamese', 'Thai'] },
+      { group: 'European',    langs: ['German', 'French', 'Spanish', 'Italian', 'Portuguese', 'Russian'] },
     ];
+
+    const langSection = document.createElement('div');
+    Object.assign(langSection.style, { marginTop: '8px' });
+
+    const langHdrRow = document.createElement('div');
+    Object.assign(langHdrRow.style, { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' });
+    const langLbl = document.createElement('span');
+    langLbl.textContent = 'LANGUAGE';
+    Object.assign(langLbl.style, { fontSize: '9px', fontWeight: '700', color: '#94a3b8', letterSpacing: '1.5px', fontFamily: 'inherit' });
+    const changeLangBtn = document.createElement('button');
+    changeLangBtn.type = 'button'; changeLangBtn.textContent = '✎ Change';
+    Object.assign(changeLangBtn.style, { fontSize: '9px', fontWeight: '600', color: '#6366f1', background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '12px', padding: '2px 7px', cursor: 'pointer', fontFamily: 'inherit' });
+    changeLangBtn.addEventListener('mousedown', e => e.preventDefault());
+    langHdrRow.append(langLbl, changeLangBtn);
+    langSection.appendChild(langHdrRow);
+
+    const langRow = document.createElement('div');
+    Object.assign(langRow.style, { display: 'flex', gap: '6px' });
+    langSection.appendChild(langRow);
+
+    const langPicker = document.createElement('div');
+    Object.assign(langPicker.style, { display: 'none', marginTop: '8px', borderTop: '1px solid rgba(99,102,241,0.1)', paddingTop: '8px', maxHeight: '160px', overflowY: 'auto' });
+    langSection.appendChild(langPicker);
+
     let _activeLangBtn = null;
+    let _chipLabels = ['English', 'Hindi', 'Hinglish'];
+    let _pickerSlot = 0;
+    let _pickerOpen = false;
+
     function setLangActive(btn) {
       if (_activeLangBtn) Object.assign(_activeLangBtn.style, { background: '#f8fafc', borderColor: 'transparent', color: '#64748b', fontWeight: '500' });
       _activeLangBtn = btn;
       Object.assign(btn.style, { background: '#eef2ff', borderColor: '#818cf8', color: '#6366f1', fontWeight: '600' });
     }
-    LANG_OPTIONS.forEach(({ key, label }) => {
-      const lb = document.createElement('button');
-      lb.type = 'button'; lb.textContent = label;
-      Object.assign(lb.style, { flex: '1', padding: '5px 4px', borderRadius: '8px', border: '1.5px solid transparent', background: '#f8fafc', color: '#64748b', fontSize: '11px', fontWeight: '500', fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s' });
-      lb.addEventListener('mousedown', e => e.preventDefault());
-      lb.addEventListener('click', () => {
-        _selectedLanguage = key;
-        setLangActive(lb);
-        chrome.storage.local.set({ tapfill_language: key });
-        if (_langCache[key]) {
-          _currentVariants = _langCache[key];
-          showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
-        } else if (key === 'hinglish' && _langCache['hindi']) {
-          const hl = transliterateVariants(_langCache['hindi']);
-          _langCache['hinglish'] = hl;
-          _currentVariants = hl;
-          showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
-        } else if (_currentTone) {
-          generateForTone(_currentTone);
-        }
+
+    function renderLangChips() {
+      langRow.innerHTML = ''; _activeLangBtn = null;
+      _chipLabels.forEach((label) => {
+        const key = label.toLowerCase();
+        const lb = document.createElement('button');
+        lb.type = 'button'; lb.textContent = label;
+        Object.assign(lb.style, { flex: '1', padding: '5px 4px', borderRadius: '8px', border: '1.5px solid transparent', background: '#f8fafc', color: '#64748b', fontSize: '11px', fontWeight: '500', fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s' });
+        lb.addEventListener('mousedown', e => e.preventDefault());
+        lb.addEventListener('click', () => {
+          _selectedLanguage = key; setLangActive(lb);
+          chrome.storage.local.set({ tapfill_language: key });
+          if (_langCache[key]) {
+            _currentVariants = _langCache[key];
+            showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
+          } else if (key === 'hinglish' && _langCache['hindi']) {
+            const hl = transliterateVariants(_langCache['hindi']);
+            _langCache['hinglish'] = hl; _currentVariants = hl;
+            showComment(_currentVariants[ENERGIES[_currentEnergyIdx].key]);
+          } else if (_currentTone) {
+            generateForTone(_currentTone);
+          }
+        });
+        langRow.appendChild(lb);
+        chrome.storage.local.get('tapfill_language', (r) => {
+          if (key === (r.tapfill_language || 'english')) setLangActive(lb);
+        });
       });
-      langRow.appendChild(lb);
-      chrome.storage.local.get('tapfill_language', (r) => { if ((r.tapfill_language || 'english') === key) setLangActive(lb); });
+    }
+
+    function renderLangPicker() {
+      langPicker.innerHTML = '';
+      const slotLbl = document.createElement('div');
+      slotLbl.textContent = 'Select chip to replace:';
+      Object.assign(slotLbl.style, { fontSize: '9px', fontWeight: '700', color: '#94a3b8', letterSpacing: '1px', marginBottom: '6px', fontFamily: 'inherit' });
+      langPicker.appendChild(slotLbl);
+      const slotRow = document.createElement('div');
+      Object.assign(slotRow.style, { display: 'flex', gap: '5px', marginBottom: '8px' });
+      _chipLabels.forEach((label, idx) => {
+        const sb = document.createElement('button'); sb.type = 'button'; sb.textContent = label;
+        Object.assign(sb.style, { flex: '1', padding: '4px 0', borderRadius: '8px', border: 'none', fontSize: '10px', fontWeight: '600', fontFamily: 'inherit', cursor: 'pointer', background: _pickerSlot === idx ? '#6366f1' : 'rgba(99,102,241,0.08)', color: _pickerSlot === idx ? '#fff' : '#5A5A72' });
+        sb.addEventListener('mousedown', e => e.preventDefault());
+        sb.addEventListener('click', () => { _pickerSlot = idx; renderLangPicker(); });
+        slotRow.appendChild(sb);
+      });
+      langPicker.appendChild(slotRow);
+      ALL_LANGS_GROUPED.forEach(({ group, langs }) => {
+        const grpLbl = document.createElement('div'); grpLbl.textContent = group;
+        Object.assign(grpLbl.style, { fontSize: '8px', fontWeight: '700', color: '#94a3b8', letterSpacing: '1.5px', textTransform: 'uppercase', margin: '6px 0 4px', fontFamily: 'inherit' });
+        langPicker.appendChild(grpLbl);
+        const row = document.createElement('div');
+        Object.assign(row.style, { display: 'flex', flexWrap: 'wrap', gap: '4px' });
+        langs.forEach(lang => {
+          const lb = document.createElement('button'); lb.type = 'button'; lb.textContent = lang;
+          const isCur = _chipLabels[_pickerSlot] === lang;
+          Object.assign(lb.style, { padding: '3px 8px', borderRadius: '12px', fontSize: '10px', fontFamily: 'inherit', cursor: 'pointer', border: '1px solid rgba(99,102,241,0.2)', background: isCur ? '#6366f1' : 'rgba(99,102,241,0.05)', color: isCur ? '#fff' : '#5A5A72' });
+          lb.addEventListener('mousedown', e => e.preventDefault());
+          lb.addEventListener('click', () => {
+            _chipLabels[_pickerSlot] = lang;
+            chrome.storage.local.set({ tapfill_chip_languages: JSON.stringify(_chipLabels) });
+            renderLangChips();
+            chrome.storage.local.get('tapfill_language', (r) => {
+              langRow.querySelectorAll('button').forEach(b => { if (b.textContent.toLowerCase() === (r.tapfill_language || 'english')) setLangActive(b); });
+            });
+            _pickerOpen = false; langPicker.style.display = 'none'; changeLangBtn.textContent = '✎ Change';
+          });
+          row.appendChild(lb);
+        });
+        langPicker.appendChild(row);
+      });
+    }
+
+    changeLangBtn.addEventListener('click', () => {
+      _pickerOpen = !_pickerOpen;
+      if (_pickerOpen) {
+        renderLangPicker(); langPicker.style.display = 'block'; changeLangBtn.textContent = '✕ Close';
+        requestAnimationFrame(() => {
+          const GAP = 8, vh = window.innerHeight;
+          const mRect = menu.getBoundingClientRect();
+          if (mRect.bottom > vh - GAP) {
+            menu.style.top = `${Math.max(GAP, parseFloat(menu.style.top) - (mRect.bottom - (vh - GAP)))}px`;
+          }
+        });
+      } else { langPicker.style.display = 'none'; changeLangBtn.textContent = '✎ Change'; }
     });
-    menu.appendChild(langRow);
+
+    chrome.storage.local.get('tapfill_chip_languages', (r) => {
+      if (r.tapfill_chip_languages) { try { _chipLabels = JSON.parse(r.tapfill_chip_languages); } catch {} }
+      renderLangChips();
+    });
+
+    menu.appendChild(langSection);
+
+    // ── Express with AI button ───────────────────────────────────────────────
+    const writeBtn = document.createElement('button');
+    writeBtn.type = 'button';
+    writeBtn.textContent = '✦ Express with AI';
+    Object.assign(writeBtn.style, {
+      display: 'none', marginTop: '10px', width: '100%',
+      padding: '11px 0', borderRadius: '12px',
+      background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+      color: '#fff', border: 'none', fontSize: '13px', fontWeight: '700',
+      cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.01em',
+      boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
+    });
+    writeBtn.addEventListener('mousedown', e => e.preventDefault());
+    writeBtn.addEventListener('click', () => { if (_currentTone) generateForTone(_currentTone); });
+    menu.appendChild(writeBtn);
 
     // ── Gradient separator (hidden until a chip is selected) ─────────────────
     const sep = document.createElement('div');
@@ -456,28 +573,31 @@
       padding: 12px 16px 16px 16px; border-top: 1px solid #f1f5f9;
     `;
 
+    function mkBtn(label, styles) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = label;
+      Object.assign(b.style, {
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        flex: '1', height: '48px', borderRadius: '12px',
+        fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+        fontFamily: 'inherit', ...styles,
+      });
+      b.addEventListener('mousedown', e => e.preventDefault());
+      return b;
+    }
+
     const retryBtn = document.createElement('button');
-    retryBtn.type = 'button';
-    retryBtn.textContent = '↻';
-    retryBtn.style.cssText = `
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 44px; height: 44px; min-width: 44px; flex-shrink: 0;
-      border: 1px solid #e2e8f0; border-radius: 12px; background: white;
-      cursor: pointer; font-size: 18px; font-family: inherit;
-    `;
+    retryBtn.type = 'button'; retryBtn.textContent = '↻';
+    Object.assign(retryBtn.style, {
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: '48px', height: '48px', minWidth: '48px', flexShrink: '0', borderRadius: '12px',
+      border: '1px solid #e2e8f0', background: 'white',
+      color: '#6366f1', fontSize: '16px', fontWeight: '600',
+      cursor: 'pointer', fontFamily: 'inherit',
+    });
     retryBtn.addEventListener('mousedown', e => e.preventDefault());
 
-    const canvasBtn = document.createElement('button');
-    canvasBtn.type = 'button';
-    canvasBtn.textContent = 'Canvas';
-    canvasBtn.style.cssText = `
-      display: inline-flex; align-items: center; justify-content: center;
-      height: 44px; flex: 1;
-      border: 1px solid #e2e8f0; border-radius: 12px; background: white;
-      cursor: pointer; font-size: 14px; font-weight: 500; color: #374151;
-      font-family: inherit;
-    `;
-    canvasBtn.addEventListener('mousedown', e => e.preventDefault());
+    const canvasBtn = mkBtn('Canvas', { border: '1px solid #e2e8f0', background: 'white', color: '#374151' });
     canvasBtn.addEventListener('click', () => {
       if (!_currentComment) return;
       chrome.runtime.sendMessage({
@@ -486,17 +606,7 @@
       });
     });
 
-    const plusCanvasBtn = document.createElement('button');
-    plusCanvasBtn.type = 'button';
-    plusCanvasBtn.textContent = '+ Canvas';
-    plusCanvasBtn.style.cssText = `
-      display: inline-flex; align-items: center; justify-content: center;
-      height: 44px; flex: 1;
-      border: 2px solid #6366f1; border-radius: 12px; background: white;
-      cursor: pointer; font-size: 14px; font-weight: 500; color: #6366f1;
-      font-family: inherit;
-    `;
-    plusCanvasBtn.addEventListener('mousedown', e => e.preventDefault());
+    const plusCanvasBtn = mkBtn('+ Canvas', { border: '2px solid #6366f1', background: 'white', color: '#6366f1' });
     plusCanvasBtn.addEventListener('click', () => {
       if (!_currentComment) return;
       chrome.runtime.sendMessage({
@@ -505,18 +615,9 @@
       });
     });
 
-    const useBtn = document.createElement('button');
-    useBtn.type = 'button';
-    useBtn.textContent = 'Use this →';
-    useBtn.style.cssText = `
-      display: inline-flex; align-items: center; justify-content: center;
-      height: 44px; flex: 1;
-      border: none; border-radius: 12px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      cursor: pointer; font-size: 14px; font-weight: 600; color: white;
-      font-family: inherit;
-    `;
-    useBtn.addEventListener('mousedown', e => e.preventDefault());
+    const useBtn = mkBtn('Use this →', {
+      border: 'none', background: 'linear-gradient(135deg,#6366f1,#818cf8)', color: '#fff',
+    });
 
     actionRow.append(retryBtn, canvasBtn, plusCanvasBtn, useBtn);
     resultCard.appendChild(actionRow);
@@ -528,67 +629,53 @@
       { label: 'Bold',     key: 'bold'     },
       { label: 'Powerful', key: 'powerful' },
     ];
-    const ENERGY_LABEL_STYLES = [
-      { color: '#c0c8d8', weight: '300' },
-      { color: '#94a3b8', weight: '400' },
-      { color: '#475569', weight: '600' },
-      { color: '#1e293b', weight: '700' },
+    const DOT_PALETTE = [
+      { fill: '#ede9fe', border: '#c4b5fd', ring: '#a78bfa', label: '#a78bfa' },
+      { fill: '#c7d2fe', border: '#818cf8', ring: '#818cf8', label: '#818cf8' },
+      { fill: '#818cf8', border: '#6366f1', ring: '#6366f1', label: '#6366f1' },
+      { fill: '#6366f1', border: '#4338ca', ring: '#4338ca', label: '#4338ca' },
     ];
 
     const energyBar = document.createElement('div');
-    Object.assign(energyBar.style, {
-      display: 'none', position: 'relative', padding: '10px 4px 4px',
-    });
-
-    const energyLine = document.createElement('div');
-    Object.assign(energyLine.style, {
-      position: 'absolute', top: '20px', left: '14px', right: '14px',
-      height: '2px',
-      background: 'linear-gradient(to right, #6366f1, #818cf8)',
-      borderRadius: '1px',
-    });
-    energyBar.appendChild(energyLine);
+    Object.assign(energyBar.style, { display: 'none', padding: '10px 4px 4px' });
 
     const energyDotsRow = document.createElement('div');
-    Object.assign(energyDotsRow.style, {
-      display: 'flex', justifyContent: 'space-between', position: 'relative',
-    });
+    Object.assign(energyDotsRow.style, { display: 'flex', justifyContent: 'space-between' });
     energyBar.appendChild(energyDotsRow);
 
     const energyDots = [];
     ENERGIES.forEach((energy, idx) => {
+      const pal = DOT_PALETTE[idx];
       const item = document.createElement('div');
       Object.assign(item.style, {
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        gap: '4px', cursor: 'pointer',
+        gap: '5px', cursor: 'pointer',
       });
       const dot = document.createElement('div');
       Object.assign(dot.style, {
-        width: '20px', height: '20px', borderRadius: '50%',
-        border: '2px solid #6366f1',
-        background: idx === 1 ? '#6366f1' : 'transparent',
-        transition: 'background 0.15s', boxSizing: 'border-box',
+        width: '22px', height: '22px', borderRadius: '50%',
+        border: `2px solid ${pal.border}`,
+        background: pal.fill, boxSizing: 'border-box',
+        transition: 'box-shadow 0.18s ease',
+        boxShadow: idx === 1 ? `0 0 0 2px #fff, 0 0 0 4px ${pal.ring}` : 'none',
       });
       energyDots.push(dot);
       const energyLabelEl = document.createElement('span');
       energyLabelEl.textContent = energy.label;
       Object.assign(energyLabelEl.style, {
-        fontSize: '9px', fontWeight: ENERGY_LABEL_STYLES[idx].weight,
-        color: ENERGY_LABEL_STYLES[idx].color, lineHeight: '1.2', whiteSpace: 'nowrap',
+        fontSize: '9px', fontWeight: idx >= 2 ? '600' : '400',
+        color: pal.label, lineHeight: '1.2', whiteSpace: 'nowrap',
+        transition: 'font-weight 0.15s',
       });
       item.append(dot, energyLabelEl);
       energyDotsRow.appendChild(item);
       item.addEventListener('mousedown', e => e.preventDefault());
       item.addEventListener('click', () => {
-        if (_currentEnergyIdx === idx || !_currentTone) return;
-        energyDots[_currentEnergyIdx].style.background = 'transparent';
-        energyDots[idx].style.background = '#6366f1';
+        if (_currentEnergyIdx === idx) return;
+        energyDots[_currentEnergyIdx].style.boxShadow = 'none';
+        energyDots[idx].style.boxShadow = `0 0 0 2px #fff, 0 0 0 4px ${DOT_PALETTE[idx].ring}`;
         _currentEnergyIdx = idx;
-        if (_currentVariants) {
-          showComment(_currentVariants[ENERGIES[idx].key]);
-        } else {
-          generateForTone(_currentTone);
-        }
+        if (_currentVariants) showComment(_currentVariants[ENERGIES[idx].key]);
       });
     });
     resultCard.insertBefore(energyBar, actionRow);
@@ -602,7 +689,6 @@
     let _currentEnergyIdx = 1;
     let _lastCopied       = false;
 
-    const SPINNER_SVG = `<svg width="14" height="14" viewBox="0 0 16 16" style="animation:li-tap-spin 0.7s linear infinite;flex-shrink:0"><circle cx="8" cy="8" r="6" fill="none" stroke="#818cf8" stroke-width="2" stroke-dasharray="25" stroke-dashoffset="9"/></svg>`;
 
     function clampPosition() {
       requestAnimationFrame(() => {
@@ -623,13 +709,13 @@
       });
     }
 
-    function showLoading(msg) {
+    function showLoading() {
       _currentComment   = null;
       _currentCommentId = null;
       _currentVariants  = null;
       sep.style.display = '';
       resultCard.style.display = 'flex';
-      spinnerWrap.innerHTML = SPINNER_SVG + ' ' + (msg || 'Generating…');
+      spinnerWrap.innerHTML = '<span class="li-tap-vibe-text">Building your vibe…</span>';
       spinnerWrap.style.display = 'flex';
       commentEl.style.display = 'none';
       energyBar.style.display = 'none';
@@ -637,15 +723,28 @@
       clampPosition();
     }
 
+    function renderWithDiff(oldText, newText) {
+      commentEl.innerHTML = '';
+      const oldWords = oldText.trim().split(/\s+/).filter(Boolean);
+      newText.trim().split(/\s+/).filter(Boolean).forEach((word, i) => {
+        if (i > 0) commentEl.appendChild(document.createTextNode(' '));
+        const span = document.createElement('span');
+        span.textContent = word;
+        if (oldWords[i] !== word) span.className = 'li-tap-word-magic';
+        commentEl.appendChild(span);
+      });
+    }
+
     function showComment(text) {
+      const prevText = _currentComment || '';
       _currentComment = text;
       spinnerWrap.style.display = 'none';
-      commentEl.textContent = text;
-      commentEl.style.display = '';
-      energyBar.style.display = '';
-      retryBtn.style.display = '';
-      useBtn.style.display = '';
-      actionRow.style.display = 'flex';
+      commentEl.style.transition = '';
+      commentEl.style.opacity   = '1';
+      commentEl.style.display   = '';
+      energyBar.style.display   = '';
+      actionRow.style.display   = 'flex';
+      renderWithDiff(prevText, text);
       clampPosition();
     }
 
@@ -673,17 +772,18 @@
       }
       spinnerWrap.style.display = 'flex';
       commentEl.style.display = 'none';
-      retryBtn.style.display = '';
-      useBtn.style.display = 'none';
-      actionRow.style.display = 'flex';
+      energyBar.style.display = 'none';
+      actionRow.style.display = 'none';
       clampPosition();
     }
 
-    async function generateForTone(toneObj, attempt = 0) {
-      // Fast pre-check: bail immediately if no token in storage
-      if (attempt === 0) {
-        const _preCheck = await new Promise(r => chrome.storage.local.get('tapfill_token', r));
-        if (!_preCheck.tapfill_token?.access_token) { showError(true); return; }
+    async function generateForTone(toneObj) {
+      const _preCheck = await new Promise(r => chrome.storage.local.get('tapfill_token', r));
+      if (!_preCheck.tapfill_token?.access_token) { showError(true); return; }
+      if (_currentEnergyIdx !== 1) {
+        energyDots[_currentEnergyIdx].style.boxShadow = 'none';
+        energyDots[1].style.boxShadow = `0 0 0 2px #fff, 0 0 0 4px ${DOT_PALETTE[1].ring}`;
+        _currentEnergyIdx = 1;
       }
       showLoading();
       try {
@@ -698,13 +798,7 @@
         _currentVariants = displayVariants;
         showComment(displayVariants[ENERGIES[_currentEnergyIdx].key]);
       } catch (err) {
-        const isRateLimit = err.message.includes('429');
-        console.error('[Tapfill] generate failed:', err);
-        if (isRateLimit && attempt < 1) {
-          showLoading('Rate limited — retrying…');
-          setTimeout(() => generateForTone(toneObj, attempt + 1), 5000);
-          return;
-        }
+        console.error('[Tapfill-LI] generate failed:', err);
         showError(err.notConnected);
       }
     }
@@ -801,11 +895,8 @@
         _selectedChip = chip;
         _currentTone  = toneObj;
         _langCache    = {};
-        if (_currentEnergyIdx !== 1) {
-          energyDots[_currentEnergyIdx].style.background = 'transparent';
-          energyDots[1].style.background = '#6366f1';
-          _currentEnergyIdx = 1;
-        }
+        writeBtn.style.display = '';
+        writeBtn.textContent = `✦ Express with AI · ${toneObj.emoji} ${toneObj.label}`;
         chip.style.background  = '#f5f3ff';
         chip.style.borderColor = '#6366f1';
         labelEl.style.color    = '#6366f1';
@@ -822,17 +913,22 @@
   async function openTapMenu(tapRootBtn) {
     closeTapMenu();
 
-    _userPlan = await getUserPlan();
-
     _menuActiveTextbox = document.querySelector(TEXTBOX_SEL);
     _menuPostText      = _menuActiveTextbox ? scrapePostText(_menuActiveTextbox) : '';
 
     const { menu } = buildTapMenu();
 
-    const POPUP_W = 640;
-    const POPUP_H = 520;
-    const left = Math.max(8, (window.innerWidth  - POPUP_W) / 2);
-    const top  = Math.max(8, (window.innerHeight - POPUP_H) / 2);
+    const POPUP_W = 320;
+    const menuH   = menu.offsetHeight || 280;
+    const bRect   = tapRootBtn.getBoundingClientRect();
+    const GAP     = 8;
+
+    let top  = bRect.top - menuH - GAP;
+    let left = bRect.left;
+    if (top < GAP) top = bRect.bottom + GAP;
+    if (top + menuH > window.innerHeight - GAP) top = window.innerHeight - menuH - GAP;
+    if (left + POPUP_W > document.documentElement.clientWidth - GAP) left = document.documentElement.clientWidth - POPUP_W - GAP;
+    if (left < GAP) left = GAP;
 
     menu.style.top        = `${top}px`;
     menu.style.left       = `${left}px`;
