@@ -833,12 +833,15 @@
       { emoji: '😄', label: 'Funny',     tone: 'funny',      temp: 0.9 },
       { emoji: '🎬', label: 'Filmy',     tone: 'filmy',      temp: 0.8 },
       { emoji: '⚡', label: 'Bold',      tone: 'bold_tone',  temp: 0.9, tonePrompt: 'Write a sharp, edgy, unapologetic comment. Says what everyone is thinking but nobody says out loud. Strong take delivered with conviction. No softening, no hedging.' },
-      { emoji: '🦉', label: 'Wise',      tone: 'wise',       temp: 0.4, tonePrompt: 'Write a thoughtful, philosophical comment like a mentor speaking. Deep insight, quotable, the kind of comment people screenshot and share.' },
+      { emoji: '🧘', label: 'Wise',      tone: 'wise',       temp: 0.4, tonePrompt: 'Write a thoughtful, philosophical comment like a mentor speaking. Deep insight, quotable, the kind of comment people screenshot and share.' },
       { emoji: '🔥', label: 'Hype',      tone: 'hype',       temp: 0.9, tonePrompt: 'Write an energetic, enthusiastic comment full of excitement. Like a best friend cheering someone on. High energy, motivating, celebratory.' },
       { emoji: '😏', label: 'Sarcastic', tone: 'sarcastic',  temp: 0.8, tonePrompt: 'Write a dry, clever, subtly sarcastic comment. The kind that makes people laugh and think at the same time. Smart sarcasm, not mean or offensive.' },
-      { emoji: '🪄', label: 'Desi',      tone: 'desi',       temp: 0.9, tonePrompt: 'Write a funny, relatable, quintessentially Indian humor comment. Use cultural references, Indian expressions, light sarcasm. The kind of comment that makes an Indian say yaar yeh toh bilkul sach hai.' },
+      { emoji: '🌶️', label: 'Desi',      tone: 'desi',       temp: 0.9, tonePrompt: 'Write a funny, relatable, quintessentially Indian humor comment. Use cultural references, Indian expressions, light sarcasm. The kind of comment that makes an Indian say yaar yeh toh bilkul sach hai.' },
     ];
-    ALL_10_TONES.forEach((toneObj) => {
+    const visibleTones = ['community_pro', 'creator'].includes(_userPlan)
+      ? ALL_10_TONES
+      : ALL_10_TONES.slice(0, 5);
+    visibleTones.forEach((toneObj) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       Object.assign(chip.style, {
@@ -912,6 +915,8 @@
 
   async function openTapMenu(tapRootBtn) {
     closeTapMenu();
+
+    _userPlan = await getUserPlan();
 
     _menuActiveTextbox = document.querySelector(TEXTBOX_SEL);
     _menuPostText      = _menuActiveTextbox ? scrapePostText(_menuActiveTextbox) : '';
